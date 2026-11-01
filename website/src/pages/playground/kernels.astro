@@ -1,0 +1,175 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import Via from '../../components/Via.astro';
+import { loadGallery, device, GALLERY_BASE, GALLERY_BRANCH, type GalleryKernel } from '../../lib/kernelGallery';
+import { site } from '../../site';
+
+const { gallery, sources, tails, reason } = await loadGallery();
+if (!gallery) console.warn(`[kernels] no published gallery yet (${reason})`);
+const kernels = gallery?.kernels ?? [];
+const passed = kernels.filter((k) => k.status === 'pass').length;
+const maxIpc = Math.max(0.001, ...kernels.map((k) => k.ipc ?? 0));
+const when = gallery ? new Date(gallery.generated_at) : null;
+const fmtDate = (d: Date) => d.toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }) + ' UTC';
+const n = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-US'));
+const dur = (s: number) => (s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`);
+const repoBlob = (p: string) => `${site.hw.gpu}/blob/${gallery?.commit || 'main'}/${p}`;
+
+function chips(k: GalleryKernel) {
+  const d = device(k), out: string[] = [];
+  if (d.clusters || d.cores) out.push(`${d.clusters ?? 1} cluster${(d.clusters ?? 1) > 1 ? 's' : ''} × ${d.cores ?? '?'} cores`);
+  if (d.warps) out.push(`${d.warps} warps`);
+  if (d.threads) out.push(`${d.threads} threads`);
+  if (d.issue) out.push(`issue width ${d.issue}`);
+  if (d.l2) out.push('L2 cache');
+  if (d.tcu) out.push(d.itype ? `tensor cores · ${d.itype} → ${d.otype ?? '?'}` : 'tensor cores');
+  if (d.dxa) out.push('DXA');
+  return out;
+}
+function parity(k: GalleryKernel) {
+  if (k.check === 'model_parity')
+    return k.known_issue
+      ? `CI runs this case on SimX and the RTL. Instructions match exactly; the cycle gap is a known one: ${k.known_issue.replace(/^cycle-parity gap /, '')}.`
+      : `CI runs this case on SimX and the RTL: instructions must match exactly and cycles agree within ${Math.round((k.tolerance ?? 0.05) * 100)}%.`;
+  if (k.check === 'perf_gate') return 'CI gates this case’s RTL cycle count against a reviewed baseline (±2%).';
+  return 'A functional case in CI’s catalog.';
+}
+---
+<Base title="G100 kernel gallery" description="Real kernels on the GRXGPU G100: vector add, SGEMM, softmax, stencils, a raycaster, and tensor-core WGMMA fed by the DXA, run on SimX with their source, cycles and IPC.">
+  <PageHead eyebrow="Playground · G100 kernel gallery" title="Kernels that run on the G100.">
+    Each kernel here is a case from grxgpu's CI catalog, run on SimX, the cycle-level model CI holds to the RTL.
+    Read the code, see how long it took and how busy it kept the cores, and open the log.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <p class="model mono"><span class="st st-replay">Replayed SimX</span> Published by <a href={site.hw.gpu}>kubeworkz/grxgpu</a>'s <code>kernel-gallery</code> workflow and picked up when this site builds. Cycles are SimX's; IPC is retired instructions per cycle across the device. Failures are shown too.</p>
+
+      {gallery ? (
+        <>
+          <div class="card summary">
+            <div class="big">
+              <span class={`dot ${passed === kernels.length ? 'ok' : 'bad'}`}></span>
+              {passed} of {kernels.length} kernels passed
+            </div>
+            <dl class="mono">
+              {gallery.commit && <div><dt>Commit</dt><dd><a href={`https://github.com/${gallery.repo}/commit/${gallery.commit}`}>{gallery.commit.slice(0, 7)}</a></dd></div>}
+              {when && <div><dt>Ran</dt><dd>{fmtDate(when)}</dd></div>}
+              <div><dt>Simulator</dt><dd>SimX · RV{gallery.xlen}</dd></div>
+              <div><dt>Default device</dt><dd>{gallery.default_shape.clusters} cluster × {gallery.default_shape.cores} cores</dd></div>
+            </dl>
+            <p class="links mono">
+              {gallery.run_url && <a href={gallery.run_url}>The workflow run ↗</a>}
+              <a href={GALLERY_BRANCH}>All results ↗</a>
+              <a href={`${site.hw.gpu}/blob/main/ci/kernel_gallery.yaml`}>What runs ↗</a>
+            </p>
+          </div>
+
+          <div class="grid">
+            {kernels.map((k) => (
+              <article class={`card kern ${k.status}`} id={k.slug}>
+                <header>
+                  <h3>{k.title}</h3>
+                  <span class={`st st-${k.status}`}>{k.status === 'pass' ? 'Passed' : 'Failed'}</span>
+                </header>
+                <p class="about">{k.about}</p>
+                <ul class="chips mono">{chips(k).map((c) => <li>{c}</li>)}</ul>
+                <dl class="mono stats">
+                  <div><dt>Cycles</dt><dd>{n(k.cycles)}</dd></div>
+                  <div><dt>Instructions</dt><dd>{n(k.instrs)}</dd></div>
+                  <div><dt>IPC</dt><dd>{k.ipc == null ? '—' : k.ipc.toFixed(3)}</dd></div>
+                </dl>
+                {k.ipc != null && <div class="bar" role="img" aria-label={`IPC ${k.ipc.toFixed(3)}`}><span style={`width:${Math.max(2, (k.ipc / maxIpc) * 100)}%`}></span></div>}
+                <p class="parity">{parity(k)}</p>
+
+                {k.sources.length > 0 && (
+                  <details class="code" open={k.status === 'pass' && k.sources.some((s) => (sources[s.path] ?? '').split('\n').length <= 40)}>
+                    <summary class="mono">Source · {k.sources.map((s) => s.file).join(', ')}</summary>
+                    {k.sources.map((s) => (
+                      <div class="file">
+                        <p class="fname mono"><a href={repoBlob(s.repo_path)}>{s.repo_path} ↗</a></p>
+                        <pre class="mono"><code>{sources[s.path] ?? '(not published)'}</code></pre>
+                      </div>
+                    ))}
+                  </details>
+                )}
+                <details class="run">
+                  <summary class="mono">How it ran{tails[k.slug] ? ' · log' : ''}</summary>
+                  <dl class="mono facts">
+                    <div><dt>Catalog case</dt><dd><code>{k.case}</code></dd></div>
+                    {k.args && <div><dt>Args</dt><dd><code>{k.args}</code></dd></div>}
+                    {k.configs && <div><dt>CONFIGS</dt><dd><code>{k.configs}</code></dd></div>}
+                    <div><dt>Command</dt><dd><code>{k.command}</code></dd></div>
+                    <div><dt>Wall time</dt><dd>{dur(k.seconds)}, build included</dd></div>
+                    {k.status !== 'pass' && <div><dt>Exit</dt><dd class="bad">{k.exit}</dd></div>}
+                  </dl>
+                  {tails[k.slug] && <pre class="mono log"><code>{tails[k.slug].map((l) => (
+                    <span class={/FAILED|errors!|Error/.test(l) ? 'l-fail' : /PASSED|^PERF: instrs/.test(l) ? 'l-pass' : ''}>{l}{'\n'}</span>
+                  ))}</code></pre>}
+                  <a class="mono full" href={`${GALLERY_BASE}/${k.log}`}>Full log ↗</a>
+                </details>
+              </article>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div class="card pending">
+          <Via size={80} />
+          <div>
+            <h3>The first published gallery is on its way.</h3>
+            <p>grxgpu's <code>kernel-gallery</code> workflow will run vector add, SGEMM, softmax, a 3D stencil, a raycaster, cross-cluster barriers and the tensor-core WGMMA kernels on SimX, then publish each one's source, cycles, IPC and log here.</p>
+            <p>Until then, every kernel runs on your own machine with <code>ci/blackbox.sh</code>. <a href={`${site.hw.gpu}#quick-start`}>grxgpu's quick start →</a></p>
+          </div>
+        </div>
+      )}
+
+      <p class="src mono">Kernels from <a href={`${site.hw.gpu}/tree/main/tests/regression`}>tests/regression</a>; cases and configs from <a href={`${site.hw.gpu}/tree/main/ci/testcases`}>ci/testcases</a>. Next: running SimX itself in your browser. Want the GRX930's NPU instead? <a href="/playground/npu-registers">Register playground</a> · <a href="/playground/replays">simulation replays</a>.</p>
+    </div>
+  </section>
+</Base>
+<style>
+  .model { font-size: .78rem; margin: 0 0 20px; line-height: 1.6; }
+  .model code { color: var(--gw-white); }
+  .st { display: inline-block; font: 500 .62rem/1 var(--gw-font-mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; border: 1px solid; white-space: nowrap; margin-right: 6px; }
+  .st-replay, .st-pass { color: var(--gw-green); border-color: #39ff1455; }
+  .st-fail { color: #ff5c7a; border-color: #ff5c7a66; }
+  .summary { margin-bottom: 16px; }
+  .big { display: flex; align-items: center; gap: 12px; font-size: 1.3rem; color: var(--gw-white); margin-bottom: 16px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .dot.ok { background: var(--gw-green); box-shadow: 0 0 10px var(--gw-green); }
+  .dot.bad { background: #ff5c7a; box-shadow: 0 0 10px #ff5c7a; }
+  dl { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 0; }
+  dt { font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gw-steel); }
+  dd { margin: 4px 0 0; color: var(--gw-white); font-size: .82rem; word-break: break-word; }
+  dd.bad { color: #ff5c7a; }
+  .links { display: flex; flex-wrap: wrap; gap: 20px; margin: 16px 0 0; font-size: .8rem; }
+  .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 980px) { .grid { grid-template-columns: 1fr 1fr; } }
+  .grid > * { min-width: 0; }
+  .kern { border-left: 2px solid var(--gw-green); display: flex; flex-direction: column; }
+  .kern.fail { border-left-color: #ff5c7a; }
+  .kern header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+  .kern h3 { font-size: 1.05rem; margin: 0; }
+  .about { font-size: .88rem; margin: 8px 0 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0 0 14px; font-size: .66rem; }
+  .chips li { border: 1px solid var(--gw-line-strong); border-radius: 3px; padding: 3px 7px; color: var(--gw-steel); }
+  .stats dd { font-size: 1.05rem; }
+  .bar { height: 6px; background: var(--gw-line); border-radius: 3px; margin: 12px 0 0; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--gw-teal); border-radius: 3px; }
+  .parity { font-size: .76rem; color: var(--gw-steel); margin: 12px 0 0; }
+  .facts { margin-top: 12px; flex-direction: column; gap: 10px; }
+  code { font-family: var(--gw-font-mono); color: var(--gw-white); font-size: .9em; }
+  details { margin-top: 14px; }
+  summary { font-size: .74rem; color: var(--gw-teal); cursor: pointer; }
+  .fname { font-size: .7rem; margin: 12px 0 0; }
+  pre { margin: 8px 0 0; padding: 12px; background: #05060a; border: 1px solid var(--gw-line); border-radius: var(--gw-radius); font-size: .68rem; line-height: 1.55; color: var(--gw-white); overflow: auto; max-height: 420px; }
+  pre.log { color: var(--gw-steel); max-height: 320px; }
+  pre :global(.l-pass) { color: var(--gw-green); }
+  pre :global(.l-fail) { color: #ff5c7a; }
+  .full { display: inline-block; font-size: .76rem; margin-top: 12px; }
+  .pending { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .pending > div { flex: 1 1 320px; }
+  .pending h3 { margin-bottom: 10px; }
+  .src { font-size: .72rem; margin: 20px 0 0; }
+</style>
