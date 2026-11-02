@@ -14,6 +14,7 @@ const when = gallery ? new Date(gallery.generated_at) : null;
 const fmtDate = (d: Date) => d.toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }) + ' UTC';
 const n = (v: number | null) => (v == null ? '—' : v.toLocaleString('en-US'));
 const dur = (s: number) => (s < 60 ? `${Math.round(s)}s` : `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`);
+const ok = (k: GalleryKernel) => k.status === 'pass';
 const repoBlob = (p: string) => `${site.hw.gpu}/blob/${gallery?.commit || 'main'}/${p}`;
 
 function chips(k: GalleryKernel) {
@@ -30,7 +31,7 @@ function chips(k: GalleryKernel) {
 function parity(k: GalleryKernel) {
   if (k.check === 'model_parity')
     return k.known_issue
-      ? `CI runs this case on SimX and the RTL. Instructions match exactly; the cycle gap is a known one: ${k.known_issue.replace(/^cycle-parity gap /, '')}.`
+      ? `CI runs this case on SimX and the RTL. Instructions match exactly; the cycle gap is a known one: ${k.known_issue.replace(/^cycle-parity gap /, '').replace(/\s*\(instrs match\)$/, '')}.`
       : `CI runs this case on SimX and the RTL: instructions must match exactly and cycles agree within ${Math.round((k.tolerance ?? 0.05) * 100)}%.`;
   if (k.check === 'perf_gate') return 'CI gates this case’s RTL cycle count against a reviewed baseline (±2%).';
   return 'A functional case in CI’s catalog.';
@@ -76,15 +77,15 @@ function parity(k: GalleryKernel) {
                 <p class="about">{k.about}</p>
                 <ul class="chips mono">{chips(k).map((c) => <li>{c}</li>)}</ul>
                 <dl class="mono stats">
-                  <div><dt>Cycles</dt><dd>{n(k.cycles)}</dd></div>
-                  <div><dt>Instructions</dt><dd>{n(k.instrs)}</dd></div>
-                  <div><dt>IPC</dt><dd>{k.ipc == null ? '—' : k.ipc.toFixed(3)}</dd></div>
+                  <div><dt>Cycles</dt><dd>{ok(k) ? n(k.cycles) : '—'}</dd></div>
+                  <div><dt>Instructions</dt><dd>{ok(k) ? n(k.instrs) : '—'}</dd></div>
+                  <div><dt>IPC</dt><dd>{ok(k) && k.ipc != null ? k.ipc.toFixed(3) : '—'}</dd></div>
                 </dl>
-                {k.ipc != null && <div class="bar" role="img" aria-label={`IPC ${k.ipc.toFixed(3)}`}><span style={`width:${Math.max(2, (k.ipc / maxIpc) * 100)}%`}></span></div>}
+                {ok(k) && k.ipc != null && <div class="bar" role="img" aria-label={`IPC ${k.ipc.toFixed(3)}`}><span style={`width:${Math.max(2, (k.ipc / maxIpc) * 100)}%`}></span></div>}
                 <p class="parity">{parity(k)}</p>
 
                 {k.sources.length > 0 && (
-                  <details class="code" open={k.status === 'pass' && k.sources.some((s) => (sources[s.path] ?? '').split('\n').length <= 40)}>
+                  <details class="code">
                     <summary class="mono">Source · {k.sources.map((s) => s.file).join(', ')}</summary>
                     {k.sources.map((s) => (
                       <div class="file">
