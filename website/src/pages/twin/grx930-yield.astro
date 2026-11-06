@@ -5,7 +5,8 @@ import Evidence from '../../components/twin/Evidence.astro';
 import Provenance from '../../components/twin/Provenance.astro';
 import LineChart from '../../components/twin/LineChart.astro';
 import Tip from '../../components/twin/Tip.astro';
-import { loadTwin, loadScenario, loadArtifact, obs, num, fmt, TWIN_BRANCH, type Observation } from '../../lib/twin';
+import RunInBrowser, { type Control } from '../../components/twin/RunInBrowser.astro';
+import { loadTwin, loadScenario, loadArtifact, loadBrowserInputs, inputValue, obs, num, fmt, TWIN_BRANCH, type Observation } from '../../lib/twin';
 
 const { index, reason } = await loadTwin();
 const base = await loadScenario(index, 'grx930_yield_28nm');
@@ -68,6 +69,21 @@ const curves = ready ? [
   { title: 'Assembly tolerance', xLabel: 'Assembly loss per pad (ppm)', pts: series('assembly_tolerance', 'assembly_per_pad_ppm'), xt: (v: number) => String(v) },
 ] : [];
 const V = (m: string) => obs(vari!.observations, 'lot_simulation', 'grx930', m);
+// Rerun the wafer-map scenario in the browser, starting from the published inputs.
+const MAP_ID = 'grx930_yield_wafer_map_28nm';
+const inputs = ready ? await loadBrowserInputs(index) : null;
+const control = (path: string, label: string, min: number, max: number, step: number, f: Control['fmt']): Control =>
+  ({ role: 'yield', path, label, min, max, step, value: inputValue(inputs!, MAP_ID, 'yield', path), fmt: f });
+const controls: Control[] = inputs ? [
+  control('defects.density_per_cm2', 'Wafer-center defect density (per cm²)', 0.02, 0.4, 0.01, 'fixed2'),
+  control('spatial.edge_boost', 'Edge boost (defect density rise to the edge)', 0, 6, 0.25, 'fixed2'),
+  control('assembly.per_pad_defect_ppm', 'Assembly loss per pad (ppm)', 1, 40, 1, 'int'),
+  control('wafer.cost_usd', 'Wafer cost (USD)', 2000, 9000, 250, 'usd'),
+] : [];
+const pub = ready ? {
+  die_yield_mean: num(W('die_yield_mean')), edge_to_center_yield_ratio: num(W('edge_to_center_yield_ratio')),
+  good_packages_per_wafer: num(W('good_packages_per_wafer')), cost_per_good_package_usd: num(W('cost_per_good_package_usd')),
+} : {};
 const warnings = ready ? [...new Set([base!, map!, sens!, vari!].flatMap((s) => s.run.warnings))] : [];
 ---
 <Base title="GRX930 wafer yield · Digital twin" description="GRX930 die and package yield on a 300 mm wafer at 28 nm: wafer map, defect sensitivity and lot variation from the Gridworkz fab digital twin.">
@@ -104,6 +120,24 @@ const warnings = ready ? [...new Set([base!, map!, sens!, vari!].flatMap((s) => 
         </div>
       </section>
 
+      {controls.length > 0 && (
+        <section class="section-line" id="run">
+          <div class="wrap">
+            <span class="eyebrow">Run it yourself</span>
+            <h2>Change the assumptions.</h2>
+            <p class="lede">The wafer-map scenario reruns here, in your browser, on the same code and inputs as the published run.
+              Move a slider and run it; the numbers and the map below update. Every result is still a planning estimate.</p>
+            <RunInBrowser scenario={MAP_ID} controls={controls} commit={index!.commit} />
+            <div class="stats yours" data-yours data-pub={JSON.stringify(pub)} hidden>
+              <div class="card stat"><span class="v" data-k="die_yield_mean"></span><span class="l">Mean die yield</span><span class="mono u" data-d="die_yield_mean"></span></div>
+              <div class="card stat"><span class="v" data-k="edge_to_center_yield_ratio"></span><span class="l">Edge ÷ center</span><span class="mono u" data-d="edge_to_center_yield_ratio"></span></div>
+              <div class="card stat"><span class="v" data-k="good_packages_per_wafer"></span><span class="l">Good packages per wafer</span><span class="mono u" data-d="good_packages_per_wafer"></span></div>
+              <div class="card stat"><span class="v" data-k="cost_per_good_package_usd"></span><span class="l">Cost per good package</span><span class="mono u" data-d="cost_per_good_package_usd"></span></div>
+            </div>
+          </div>
+        </section>
+      )}
+
       <section class="section-line">
         <div class="wrap map-grid">
           <div>
@@ -128,10 +162,10 @@ const warnings = ready ? [...new Set([base!, map!, sens!, vari!].flatMap((s) => 
           <figure class="wafer" data-tip-host>
             <canvas id="wafer" width="560" height="560" aria-label={`Wafer map of ${wafer.i.length} dies, expected yield loss per die`}></canvas>
             <div class="legend mono">
-              <span>{(Math.min(...wafer.loss) / 1000).toFixed(2)}%</span>
+              <span id="wafer-lo">{(Math.min(...wafer.loss) / 1000).toFixed(2)}%</span>
               <span class="ramp" aria-hidden="true"></span>
-              <span>{(Math.max(...wafer.loss) / 1000).toFixed(2)}%</span>
-              <span class="lt">expected yield loss per die</span>
+              <span id="wafer-hi">{(Math.max(...wafer.loss) / 1000).toFixed(2)}%</span>
+              <span class="lt" id="wafer-caption">expected yield loss per die · published run</span>
             </div>
             <script type="application/json" id="wafer-data" set:html={JSON.stringify(wafer)} />
           </figure>
@@ -182,13 +216,50 @@ const warnings = ready ? [...new Set([base!, map!, sens!, vari!].flatMap((s) => 
 </Base>
 
 <script>
+  // A browser run's results: tiles against the published run, and its own wafer map.
+  const yours = document.querySelector<HTMLElement>('[data-yours]');
+  document.addEventListener('twin-result', ((e: CustomEvent) => {
+    if (!yours) return;
+    const { result } = e.detail;
+    const pub = JSON.parse(yours.dataset.pub || '{}') as Record<string, number>;
+    const v = (m: string) => result.observations.find((o: { entity_type: string; metric: string }) => o.entity_type === 'wafer_map' && o.metric === m)?.value as number;
+    const show: Record<string, (x: number) => string> = {
+      die_yield_mean: (x) => `${(x * 100).toFixed(2)}%`,
+      edge_to_center_yield_ratio: (x) => x.toFixed(4),
+      good_packages_per_wafer: (x) => Math.round(x).toLocaleString('en-US'),
+      cost_per_good_package_usd: (x) => `$${x.toFixed(2)}`,
+    };
+    for (const m of Object.keys(show)) {
+      const mine = v(m), was = pub[m], d = mine - was;
+      yours.querySelector(`[data-k="${m}"]`)!.textContent = show[m](mine);
+      yours.querySelector(`[data-d="${m}"]`)!.textContent = Math.abs(d) < 1e-12
+        ? `same as published`
+        : `published ${show[m](was)} · ${d > 0 ? '+' : '−'}${m === 'die_yield_mean' ? `${(Math.abs(d) * 100).toFixed(2)} pts` : show[m](Math.abs(d))}`;
+    }
+    yours.hidden = false;
+    const csv = (result.artifacts['wafer_map.csv'] as string).trim().split('\n');
+    const head = csv[0].split(','), col = (n: string) => head.indexOf(n);
+    const rows = csv.slice(1).map((l) => l.split(','));
+    const xs = rows.map((r) => +r[col('x_mm')]), ys = rows.map((r) => +r[col('y_mm')]);
+    const ux = [...new Set(xs)].sort((a, b) => a - b);
+    const pitch = Math.min(...ux.slice(1).map((x, k) => x - ux[k]).filter((d) => d > 1e-6));
+    const x0 = Math.min(...xs), y0 = Math.min(...ys);
+    window.dispatchEvent(new CustomEvent('twin-wafer', { detail: { label: 'your run', wafer: {
+      pitch, x0, y0, radius: 150,
+      i: xs.map((x) => Math.round((x - x0) / pitch)), j: ys.map((y) => Math.round((y - y0) / pitch)),
+      loss: rows.map((r) => Math.round((1 - +r[col('expected_die_yield')]) * 1e5)),
+    } } }));
+  }) as EventListener);
+
   const el = document.getElementById('wafer-data');
   const canvas = document.getElementById('wafer') as HTMLCanvasElement | null;
   if (el && canvas) {
-    const w = JSON.parse(el.textContent || '{}') as { pitch: number; x0: number; y0: number; i: number[]; j: number[]; loss: number[]; radius: number };
+    type Wafer = { pitch: number; x0: number; y0: number; i: number[]; j: number[]; loss: number[]; radius: number };
+    const published = JSON.parse(el.textContent || '{}') as Wafer;
+    let w = published;
     // Sequential single-hue ramp (blue 700 -> 100): low loss recedes into the surface.
     const ramp = ['#0d366b', '#104281', '#184f95', '#1c5cab', '#256abf', '#2a78d6', '#3987e5', '#5598e7', '#6da7ec', '#86b6ef', '#9ec5f4', '#b7d3f6', '#cde2fb'];
-    const lo = Math.min(...w.loss), hi = Math.max(...w.loss);
+    let lo = Math.min(...w.loss), hi = Math.max(...w.loss);
     const color = (l: number) => ramp[Math.min(ramp.length - 1, Math.floor(((l - lo) / (hi - lo || 1)) * ramp.length))];
     const dpr = window.devicePixelRatio || 1, S = 560;
     canvas.width = S * dpr; canvas.height = S * dpr;
@@ -213,8 +284,19 @@ const warnings = ready ? [...new Set([base!, map!, sens!, vari!].flatMap((s) => 
       }
     };
     draw();
-    const at = new Map<string, number>();
-    w.i.forEach((i, n) => at.set(`${i},${w.j[n]}`, n));
+    let at = new Map<string, number>();
+    const index = () => { at = new Map(); w.i.forEach((i, n) => at.set(`${i},${w.j[n]}`, n)); };
+    index();
+    // A run in the browser hands back its own per-die map; the scale spans the
+    // published run and this one, so a change in loss stays visible.
+    window.addEventListener('twin-wafer', ((e: CustomEvent) => {
+      w = e.detail.wafer as Wafer;
+      lo = Math.min(...published.loss, ...w.loss); hi = Math.max(...published.loss, ...w.loss);
+      document.getElementById('wafer-lo')!.textContent = `${(lo / 1000).toFixed(2)}%`;
+      document.getElementById('wafer-hi')!.textContent = `${(hi / 1000).toFixed(2)}%`;
+      document.getElementById('wafer-caption')!.textContent = `expected yield loss per die · ${e.detail.label}`;
+      index(); draw();
+    }) as EventListener);
     canvas.addEventListener('pointermove', (e) => {
       const r = canvas.getBoundingClientRect();
       const mx = ((e.clientX - r.left) / r.width) * S, my = ((e.clientY - r.top) / r.height) * S;
@@ -243,6 +325,8 @@ const warnings = ready ? [...new Set([base!, map!, sens!, vari!].flatMap((s) => 
   .stat .m { display: flex; gap: 8px; align-items: center; }
   .u { font-size: .75rem; color: var(--gw-steel); }
   .note { margin-top: 20px; max-width: 52rem; }
+  .yours { margin-top: 16px; }
+  .yours .u { font-size: .75rem; color: var(--gw-steel); }
   .map-grid { display: grid; gap: 40px; grid-template-columns: 1fr; align-items: start; }
   .map-grid > * { min-width: 0; }
   @media (min-width: 960px) { .map-grid { grid-template-columns: 1fr 1.1fr; } }

@@ -6,7 +6,8 @@ import Provenance from '../../components/twin/Provenance.astro';
 import BarChart from '../../components/twin/BarChart.astro';
 import LineChart from '../../components/twin/LineChart.astro';
 import Tip from '../../components/twin/Tip.astro';
-import { loadTwin, loadScenario, obs, num, fmt, TWIN_BRANCH, WEEK_S } from '../../lib/twin';
+import RunInBrowser, { type Control } from '../../components/twin/RunInBrowser.astro';
+import { loadTwin, loadScenario, loadBrowserInputs, inputValue, obs, num, fmt, TWIN_BRANCH, WEEK_S } from '../../lib/twin';
 
 const { index, reason } = await loadTwin();
 const fab = await loadScenario(index, 'g100_factory_28nm');
@@ -66,6 +67,21 @@ const sweep = (type: string, key: string, metric: string) => rows
   .sort((a, b) => a.x - b.x);
 const npvByRate = ready ? sweep('factory_discount_sensitivity', 'discount', 'npv_usd').map((p) => ({ ...p, tip: `discount rate ${fmt.pct(p.x, 1)}\nNPV ${fmt.musd(p.y)}` })) : [];
 const npvByPrice = ready ? sweep('factory_sensitivity', 'price', 'npv_usd').map((p) => ({ ...p, tip: `package price ${fmt.usd(p.x, 0)}\nNPV at the hurdle rate ${fmt.musd(p.y)}` })) : [];
+// Rerun the factory scenario in the browser, starting from the published inputs.
+const FAB_ID = 'g100_factory_28nm';
+const inputs = ready ? await loadBrowserInputs(index) : null;
+const control = (path: string, label: string, min: number, max: number, step: number, f: Control['fmt']): Control =>
+  ({ role: 'factory', path, label, min, max, step, value: inputValue(inputs!, FAB_ID, 'factory', path), fmt: f });
+const controls: Control[] = inputs ? [
+  control('wafer_starts_per_week', 'Wafer starts per week', 300, 1000, 25, 'int'),
+  control('tool_groups.litho.tools', 'Lithography scanners', 2, 6, 1, 'int'),
+  control('tool_groups.litho.mttr_hours', 'Scanner repair time, MTTR (hours)', 2, 30, 1, 'h'),
+  control('package_price_usd', 'Package price (USD)', 60, 160, 5, 'usd'),
+] : [];
+const pubBase = baseline ? {
+  cycle: baseline.cycle, wip: baseline.wip, tput: baseline.tput, util: baseline.util,
+  group: baseline.bottleneck_tool_group, cost: baseline.cost,
+} : {};
 const fmtIrr = (o: ReturnType<typeof X>) => (typeof o.value === 'number' ? fmt.pct(o.value, 1) : 'n/a');
 ---
 <Base title="Factory & ATP · Digital twin" description="A discrete-event model of the G100 28 nm fab and assembly/test line: cycle time, WIP, bottlenecks and the business case for a fourth scanner.">
@@ -96,6 +112,25 @@ const fmtIrr = (o: ReturnType<typeof X>) => (typeof o.value === 'number' ? fmt.p
           )}
         </div>
       </section>
+
+      {controls.length > 0 && (
+        <section class="section-line" id="run">
+          <div class="wrap">
+            <span class="eyebrow">Run it yourself</span>
+            <h2>Run the line your way.</h2>
+            <p class="lede">The factory scenario reruns here, in your browser: the same SimPy model, route and tools as the published run.
+              Your settings change the baseline case; the what-ifs below keep their own definitions. A run takes a few seconds.</p>
+            <RunInBrowser scenario={FAB_ID} controls={controls} commit={index!.commit} />
+            <div class="stats yours" data-yours data-pub={JSON.stringify(pubBase)} hidden>
+              <div class="card stat"><span class="v" data-k="cycle"></span><span class="l">Cycle time</span><span class="mono u" data-d="cycle"></span></div>
+              <div class="card stat"><span class="v" data-k="wip"></span><span class="l">Lots in progress</span><span class="mono u" data-d="wip"></span></div>
+              <div class="card stat"><span class="v" data-k="tput"></span><span class="l">Wafers out per week</span><span class="mono u" data-d="tput"></span></div>
+              <div class="card stat"><span class="v" data-k="util"></span><span class="l" data-k="group"></span><span class="mono u" data-d="util"></span></div>
+              <div class="card stat"><span class="v" data-k="cost"></span><span class="l">Cost per good package</span><span class="mono u" data-d="cost"></span></div>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section class="section-line">
         <div class="wrap">
@@ -175,6 +210,37 @@ const fmtIrr = (o: ReturnType<typeof X>) => (typeof o.value === 'number' ? fmt.p
 </Base>
 
 <script>
+  // A browser run's baseline case, against the published baseline.
+  const yours = document.querySelector<HTMLElement>('[data-yours]');
+  const WEEK = 7 * 24 * 3600;
+  document.addEventListener('twin-result', ((e: CustomEvent) => {
+    if (!yours) return;
+    const { result } = e.detail;
+    const pub = JSON.parse(yours.dataset.pub || '{}') as Record<string, number | string>;
+    const v = (m: string) => result.observations.find((o: { entity_type: string; entity_id: string; metric: string }) =>
+      o.entity_type === 'factory_case' && o.entity_id === 'baseline' && o.metric === m)?.value as number;
+    const meta = (result.engines[0].metadata.cases as { id: string; bottleneck_tool_group: string }[]).find((c) => c.id === 'baseline')!;
+    const mine: Record<string, number> = {
+      cycle: v('cycle_time_s'), wip: v('wip_lots'), tput: v('throughput_wafers_per_s') * WEEK,
+      util: v('bottleneck_tool_utilization'), cost: v('cost_per_good_package_usd'),
+    };
+    const show: Record<string, (x: number) => string> = {
+      cycle: (x) => `${(x / 3600).toFixed(1)} h`, wip: (x) => x.toFixed(1), tput: (x) => x.toFixed(1),
+      util: (x) => `${(x * 100).toFixed(1)}%`, cost: (x) => `$${x.toFixed(2)}`,
+    };
+    for (const m of Object.keys(show)) {
+      const was = pub[m] as number, d = mine[m] - was;
+      yours.querySelector(`[data-k="${m}"]`)!.textContent = show[m](mine[m]);
+      yours.querySelector(`[data-d="${m}"]`)!.textContent = Math.abs(d) < 1e-9
+        ? 'same as published'
+        : `published ${show[m](was)} · ${d > 0 ? '+' : '−'}${m === 'util' ? `${(Math.abs(d) * 100).toFixed(1)} pts` : show[m](Math.abs(d))}`;
+    }
+    const moved = meta.bottleneck_tool_group !== pub.group;
+    yours.querySelector('[data-k="group"]')!.textContent =
+      `Bottleneck: ${meta.bottleneck_tool_group}${moved ? ` (was ${pub.group})` : ''}`;
+    yours.hidden = false;
+  }) as EventListener);
+
   const tabs = document.querySelectorAll<HTMLButtonElement>('[data-case]');
   tabs.forEach((t) => t.addEventListener('click', () => {
     tabs.forEach((x) => x.setAttribute('aria-selected', String(x === t)));
@@ -191,6 +257,8 @@ const fmtIrr = (o: ReturnType<typeof X>) => (typeof o.value === 'number' ? fmt.p
   .stat .v { color: var(--gw-white); font: 600 1.8rem/1.1 var(--gw-font-sans); letter-spacing: -.02em; }
   .stat .l { font-size: .9rem; }
   .stat .m { display: flex; gap: 8px; align-items: center; }
+  .yours { margin-top: 16px; }
+  .yours .u { font-size: .75rem; color: var(--gw-steel); }
   .tbl-wrap { overflow-x: auto; margin-top: 28px; }
   .cases { border-collapse: collapse; width: 100%; font-size: .88rem; min-width: 720px; }
   .cases th, .cases td { padding: 10px 12px; border-bottom: 1px solid var(--gw-line); text-align: left; vertical-align: top; }

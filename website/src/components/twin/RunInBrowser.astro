@@ -1,0 +1,92 @@
+---
+// Rerun a published scenario in the visitor's browser (Pyodide), with the
+// controls as input overrides. Only changed controls are sent, so an
+// untouched run reproduces the published one. The page listens for the
+// `twin-result` event and draws the result itself.
+import { TWIN_BASE, TWIN_REPO } from '../../lib/twin';
+import { PYODIDE_VERSION } from '../../lib/pyodide';
+export interface Control {
+  role: string; path: string; label: string;
+  min: number; max: number; step: number; value: number;
+  fmt: 'pct' | 'int' | 'fixed2' | 'fixed1' | 'usd' | 'h';
+}
+interface Props { scenario: string; controls: Control[]; commit: string | null }
+const { scenario, controls, commit } = Astro.props;
+---
+<div class="rib card" data-rib data-scenario={scenario} data-base={TWIN_BASE}>
+  <div class="ctl">
+    {controls.map((c) => (
+      <label>
+        <span class="lab">{c.label}</span>
+        <span class="val mono" data-val></span>
+        <input type="range" min={c.min} max={c.max} step={c.step} value={c.value}
+          data-role={c.role} data-path={c.path} data-default={c.value} data-fmt={c.fmt} />
+        <span class="def mono">published {c.value}</span>
+      </label>
+    ))}
+  </div>
+  <div class="act">
+    <button type="button" class="btn btn-primary" data-run>Run in your browser</button>
+    <button type="button" class="btn btn-ghost" data-reset>Reset</button>
+    <span class="status mono" data-status aria-live="polite">
+      Runs fabtwin from <a href={commit ? `${TWIN_REPO}/commit/${commit}` : TWIN_REPO}>kubeworkz/gpdk{commit ? `@${commit.slice(0, 7)}` : ''}</a>
+      in Pyodide {PYODIDE_VERSION}, in this tab. The first run downloads about 13 MB.
+    </span>
+  </div>
+</div>
+
+<script>
+  import { runTwin, onProgress } from '../../lib/twinRunner';
+  const show = (fmt: string, v: number) => ({
+    pct: `${(v * 100).toFixed(0)}%`, int: String(Math.round(v)), fixed2: v.toFixed(2), fixed1: v.toFixed(1),
+    usd: `$${v.toLocaleString('en-US')}`, h: `${v} h`,
+  } as Record<string, string>)[fmt] ?? String(v);
+  document.querySelectorAll<HTMLElement>('[data-rib]').forEach((root) => {
+    const inputs = [...root.querySelectorAll<HTMLInputElement>('input[type=range]')];
+    const status = root.querySelector<HTMLElement>('[data-status]')!;
+    const run = root.querySelector<HTMLButtonElement>('[data-run]')!;
+    const paint = (i: HTMLInputElement) => {
+      i.parentElement!.querySelector<HTMLElement>('[data-val]')!.textContent = show(i.dataset.fmt!, +i.value);
+      i.parentElement!.classList.toggle('changed', +i.value !== +i.dataset.default!);
+    };
+    inputs.forEach((i) => { paint(i); i.addEventListener('input', () => paint(i)); });
+    root.querySelector('[data-reset]')!.addEventListener('click', () => {
+      inputs.forEach((i) => { i.value = i.dataset.default!; paint(i); });
+    });
+    onProgress((stage) => { status.textContent = stage; });
+    run.addEventListener('click', async () => {
+      const overrides: Record<string, Record<string, number>> = {};
+      for (const i of inputs) {
+        if (+i.value === +i.dataset.default!) continue;
+        (overrides[i.dataset.role!] ??= {})[i.dataset.path!] = +i.value;
+      }
+      run.disabled = true;
+      status.textContent = 'Starting…';
+      try {
+        const { result, ms, version } = await runTwin(root.dataset.base!, root.dataset.scenario!, overrides);
+        const n = result.overrides.length;
+        status.textContent = `Ran ${result.scenario_id} in your browser in ${(ms / 1000).toFixed(1)} s · Pyodide ${version} · ${n ? `${n} input${n > 1 ? 's' : ''} changed` : 'published inputs'}`;
+        root.dispatchEvent(new CustomEvent('twin-result', { bubbles: true, detail: { result, ms, version } }));
+      } catch (e) {
+        status.textContent = `Could not run: ${(e as Error).message}`;
+      } finally {
+        run.disabled = false;
+      }
+    });
+  });
+</script>
+
+<style>
+  .rib { padding: 22px; }
+  .ctl { display: grid; gap: 14px 28px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .ctl { grid-template-columns: 1fr 1fr; } }
+  label { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+  .lab { color: var(--gw-white); font-size: .9rem; }
+  .val { color: var(--gw-white); font-size: .85rem; text-align: right; }
+  label.changed .val { color: var(--gw-teal); }
+  input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--gw-teal); }
+  .def { grid-column: 1 / -1; font-size: .7rem; color: var(--gw-steel); }
+  .act { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 20px; }
+  .act .btn[disabled] { opacity: .6; cursor: progress; }
+  .status { font-size: .78rem; flex: 1 1 280px; }
+</style>
