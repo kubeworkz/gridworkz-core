@@ -3,13 +3,14 @@ title: Gridworkz Documentation
 description: GRX930 RISC-V SoC, G100 GPU, photonic tensor accelerator and the GRXCP software platform.
 ---
 
-Gridworkz designs open hardware for AI research. The work lives in three repositories under [github.com/kubeworkz](https://github.com/kubeworkz):
+Gridworkz designs open hardware for AI research. The work lives in four repositories under [github.com/kubeworkz](https://github.com/kubeworkz):
 
 | Repository | What it is | Status |
 |---|---|---|
-| [grx930](https://github.com/kubeworkz/grx930) | RISC-V SoC: 4 × RV64IMAC cores, 2 × 8×8 systolic NPUs, coherent L2, AXI4 fabric | Verified in simulation; timing closed on Artix-7 FPGA; GF180MCU test chip in progress |
+| [grx930](https://github.com/kubeworkz/grx930) | RISC-V SoC: 4 × RV64IMAC cores, 2 × 8×8 systolic NPUs, coherent L2, AXI4 fabric | Verified in simulation; timing closed on Artix-7 FPGA; SKY130 test chip in progress |
 | [grxgpu](https://github.com/kubeworkz/grxgpu) | G100: open RISC-V GPU built on Vortex, with tensor cores, DXA, ray tracing and graphics. Also hosts the photonic tensor accelerator (PTA) design proposals | Simulation (SimX, RTL); discovery configuration under review |
 | [grxcp](https://github.com/kubeworkz/grxcp) | GRXCP: CUDA-style runtime, `grxcc` compiler, grxBLAS and tools for the G100 and GRX930 | In active development |
+| [gpdk](https://github.com/kubeworkz/gpdk) | The fab digital twin: GRX28 28 nm-class planning PDK, wafer yield, packaging, photonics and a discrete-event fab, as reproducible scenarios ([live results](/twin)) | Planning models; scenario estimates, not foundry sign-off |
 
 ## Where to start
 

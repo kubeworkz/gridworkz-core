@@ -1,0 +1,211 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import Evidence from '../../components/twin/Evidence.astro';
+import Provenance from '../../components/twin/Provenance.astro';
+import BarChart from '../../components/twin/BarChart.astro';
+import LineChart from '../../components/twin/LineChart.astro';
+import Tip from '../../components/twin/Tip.astro';
+import { loadTwin, loadScenario, obs, num, fmt, TWIN_BRANCH, WEEK_S } from '../../lib/twin';
+
+const { index, reason } = await loadTwin();
+const fab = await loadScenario(index, 'g100_factory_28nm');
+const ready = !!(index && fab);
+const rows = fab?.observations ?? [];
+
+interface CaseMeta { id: string; description: string; bottleneck_tool_group: string; bottleneck_step: string; tool_counts: Record<string, number>; wafer_starts_per_week: number }
+const meta = ready
+  ? ((fab!.manifest.engines as { metadata: { cases: CaseMeta[] } }[])[0].metadata.cases)
+  : [];
+const C = (id: string, m: string) => obs(rows, 'factory_case', id, m);
+const label: Record<string, string> = {
+  baseline: 'Baseline', higher_starts: 'Higher starts', low_downtime: 'Half MTTR', extra_litho: 'Fourth scanner',
+};
+const cases = meta.map((m) => ({
+  ...m,
+  label: label[m.id] ?? m.id,
+  starts: num(C(m.id, 'wafer_starts_per_s')) * WEEK_S,
+  cycle: num(C(m.id, 'cycle_time_s')),
+  queue: num(C(m.id, 'queue_time_s')),
+  wip: num(C(m.id, 'wip_lots')),
+  tput: num(C(m.id, 'throughput_wafers_per_s')) * WEEK_S,
+  good: num(C(m.id, 'good_packages_per_s')) * WEEK_S,
+  util: num(C(m.id, 'bottleneck_tool_utilization')),
+  cost: num(C(m.id, 'cost_per_good_package_usd')),
+}));
+const baseline = cases.find((c) => c.id === 'baseline');
+
+// Tool-group utilization per case, same groups and order in every chart.
+const groupsOf = (id: string) => rows
+  .filter((o) => o.entity_type === 'tool_group' && o.entity_id.startsWith(`${id}:`))
+  .map((o) => ({ group: o.entity_id.slice(id.length + 1), value: num(o) }));
+const order = ready ? groupsOf('baseline').sort((a, b) => b.value - a.value).map((g) => g.group) : [];
+const utilCharts = cases.map((c) => {
+  const g = new Map(groupsOf(c.id).map((x) => [x.group, x.value]));
+  return {
+    id: c.id, label: c.label,
+    bars: order.map((name) => ({
+      label: name.replace(/_/g, ' '), value: g.get(name) ?? 0,
+      note: name === c.bottleneck_tool_group ? 'bottleneck' : undefined,
+      tip: `${c.label}: ${name}\nutilization ${fmt.pct(g.get(name) ?? 0, 1)}\ntools ${c.tool_counts[name] ?? '—'}`,
+    })),
+  };
+});
+
+// The ten longest queues on the baseline route.
+const queues = rows
+  .filter((o) => o.entity_type === 'route_step' && o.entity_id.startsWith('baseline:'))
+  .map((o) => ({ step: o.entity_id.slice('baseline:'.length), s: num(o) }))
+  .sort((a, b) => b.s - a.s).slice(0, 10);
+
+// The fourth scanner's economics.
+const X = (m: string) => C('extra_litho', m);
+const sweep = (type: string, key: string, metric: string) => rows
+  .filter((o) => o.entity_type === type && o.entity_id.startsWith(`extra_litho:${key}:`) && o.metric === metric)
+  .map((o) => ({ x: +o.entity_id.split(':')[2], y: num(o) }))
+  .sort((a, b) => a.x - b.x);
+const npvByRate = ready ? sweep('factory_discount_sensitivity', 'discount', 'npv_usd').map((p) => ({ ...p, tip: `discount rate ${fmt.pct(p.x, 1)}\nNPV ${fmt.musd(p.y)}` })) : [];
+const npvByPrice = ready ? sweep('factory_sensitivity', 'price', 'npv_usd').map((p) => ({ ...p, tip: `package price ${fmt.usd(p.x, 0)}\nNPV at the hurdle rate ${fmt.musd(p.y)}` })) : [];
+const fmtIrr = (o: ReturnType<typeof X>) => (typeof o.value === 'number' ? fmt.pct(o.value, 1) : 'n/a');
+---
+<Base title="Factory & ATP · Digital twin" description="A discrete-event model of the G100 28 nm fab and assembly/test line: cycle time, WIP, bottlenecks and the business case for a fourth scanner.">
+  <PageHead eyebrow="Digital twin · G100 · factory" title="Where the G100 line waits, and what a fourth scanner buys.">
+    A SimPy discrete-event model of a 28 nm fab and assembly/test route: finite tool groups, batching, setup
+    and availability loss. It runs a baseline and three what-ifs and reports cycle time, WIP, throughput,
+    the bottleneck and cost per good package.
+  </PageHead>
+
+  {!ready ? (
+    <section style="padding-top:0"><div class="wrap"><div class="card pending">
+      <p><strong>No published run yet.</strong> The twin's CI publishes to <a href={TWIN_BRANCH}>kubeworkz/gpdk · twin-data</a> on every push to main; this page fills in from the next one.</p>
+      {reason && <p class="mono small">{reason}</p>}
+    </div></div></section>
+  ) : (
+    <>
+      <section style="padding-top:0">
+        <div class="wrap">
+          <p class="claim mono">{index!.claim} · {fab!.run.process} · route and tool data are planning assumptions</p>
+          {baseline && (
+            <div class="stats">
+              <div class="card stat"><span class="v">{fmt.hours(baseline.cycle)}</span><span class="l">Cycle time ({(baseline.cycle / 86400).toFixed(1)} days)</span><span class="m"><Evidence cls={C('baseline', 'cycle_time_s').evidence_class} /></span></div>
+              <div class="card stat"><span class="v">{baseline.wip.toFixed(1)}</span><span class="l">Lots in progress</span><span class="m"><Evidence cls={C('baseline', 'wip_lots').evidence_class} /></span></div>
+              <div class="card stat"><span class="v">{baseline.tput.toFixed(0)}</span><span class="l">Wafers out per week, of {baseline.starts.toFixed(0)} started</span><span class="m"><Evidence cls={C('baseline', 'throughput_wafers_per_s').evidence_class} /></span></div>
+              <div class="card stat"><span class="v">{fmt.pct(baseline.util, 1)}</span><span class="l">Bottleneck: {baseline.bottleneck_tool_group} ({baseline.bottleneck_step.replace(/_/g, ' ')})</span><span class="m"><Evidence cls={C('baseline', 'bottleneck_tool_utilization').evidence_class} /></span></div>
+              <div class="card stat"><span class="v">{fmt.usd(baseline.cost)}</span><span class="l">Cost per good package</span><span class="m"><Evidence cls={C('baseline', 'cost_per_good_package_usd').evidence_class} /></span></div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">What-ifs</span>
+          <h2>Four ways to run the line.</h2>
+          <div class="tbl-wrap">
+            <table class="cases">
+              <thead><tr><th></th>{cases.map((c) => <th>{c.label}</th>)}</tr></thead>
+              <tbody>
+                <tr><td>What changes</td>{cases.map((c) => <td class="desc">{c.description}</td>)}</tr>
+                <tr><td>Wafer starts / week</td>{cases.map((c) => <td class="mono">{c.starts.toFixed(0)}</td>)}</tr>
+                <tr><td>Cycle time</td>{cases.map((c) => <td class="mono">{fmt.hours(c.cycle)}</td>)}</tr>
+                <tr><td>Queue time</td>{cases.map((c) => <td class="mono">{fmt.hours(c.queue)}</td>)}</tr>
+                <tr><td>WIP (lots)</td>{cases.map((c) => <td class="mono">{c.wip.toFixed(1)}</td>)}</tr>
+                <tr><td>Wafers out / week</td>{cases.map((c) => <td class="mono">{c.tput.toFixed(1)}</td>)}</tr>
+                <tr><td>Good packages / week</td>{cases.map((c) => <td class="mono">{fmt.int(c.good)}</td>)}</tr>
+                <tr><td>Bottleneck</td>{cases.map((c) => <td class="mono">{c.bottleneck_tool_group} {fmt.pct(c.util, 1)}</td>)}</tr>
+                <tr><td>Cost / good package</td>{cases.map((c) => <td class="mono">{fmt.usd(c.cost)}</td>)}</tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Tool groups</span>
+          <h2>Utilization by tool group.</h2>
+          <div class="seg mono" role="tablist" aria-label="Case">
+            {utilCharts.map((u, i) => <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-case={u.id}>{u.label}</button>)}
+          </div>
+          <div class="two">
+            <div class="card">
+              {utilCharts.map((u, i) => (
+                <div data-panel={u.id} hidden={i !== 0}>
+                  <BarChart title={`${u.label}: utilization`} bars={u.bars} max={1} valueLabel="Utilization" fmtValue={(v) => fmt.pct(v, 1)} />
+                </div>
+              ))}
+            </div>
+            <div class="card">
+              <BarChart title="Baseline: the ten longest queues on the route" bars={queues.map((q) => ({ label: q.step.replace(/_/g, ' '), value: q.s / 3600, tip: `${q.step}\nqueue ${fmt.hours(q.s, 2)}` }))} valueLabel="Queue (h)" fmtValue={(v) => `${v.toFixed(2)} h`} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Capital</span>
+          <h2>Does a fourth scanner pay?</h2>
+          <p class="lede">Against the 800-start, three-scanner case: {fmt.musd(num(X('incremental_capex_usd')), 0)} of capex and{' '}
+            {fmt.musd(num(X('incremental_annual_cash_flow_usd')))} a year of extra cash flow at the scenario's planning price.</p>
+          <div class="stats">
+            <div class="card stat"><span class="v">{fmt.musd(num(X('npv_usd')))}</span><span class="l">NPV at the hurdle rate</span><span class="m"><Evidence cls={X('npv_usd').evidence_class} /></span></div>
+            <div class="card stat"><span class="v">{fmtIrr(X('irr'))}</span><span class="l">IRR</span><span class="m"><Evidence cls={X('irr').evidence_class} /></span></div>
+            <div class="card stat"><span class="v">{num(X('payback_years')).toFixed(2)} yr</span><span class="l">Payback</span><span class="m"><Evidence cls={X('payback_years').evidence_class} /></span></div>
+          </div>
+          <div class="two" style="margin-top:16px">
+            <div class="card"><LineChart title="NPV by discount rate" points={npvByRate} xLabel="Discount rate" yLabel="NPV" xTick={(v) => fmt.pct(v, 1)} yTick={(v) => fmt.musd(v, 1)} zeroLine /></div>
+            <div class="card"><LineChart title="NPV by package price" points={npvByPrice} xLabel="Package price (USD)" yLabel="NPV" xTick={(v) => `$${v}`} yTick={(v) => fmt.musd(v, 1)} zeroLine /></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Limits</span>
+          <h2>What this model leaves out.</h2>
+          <ul class="warn">{fab!.run.warnings.map((w) => <li>{w}</li>)}</ul>
+          <Provenance index={index!} scenario={fab!} />
+          <p style="margin-top:24px"><a href="/twin">← The digital twin</a> · <a href="/twin/grx930-yield">GRX930 wafer yield →</a></p>
+        </div>
+      </section>
+    </>
+  )}
+  <Tip />
+</Base>
+
+<script>
+  const tabs = document.querySelectorAll<HTMLButtonElement>('[data-case]');
+  tabs.forEach((t) => t.addEventListener('click', () => {
+    tabs.forEach((x) => x.setAttribute('aria-selected', String(x === t)));
+    document.querySelectorAll<HTMLElement>('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.case; });
+  }));
+</script>
+
+<style>
+  .pending { max-width: 46rem; }
+  .small { font-size: .8rem; }
+  .claim { color: #ffb020; font-size: .8rem; margin-bottom: 18px; }
+  .stats { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-top: 24px; }
+  .stat { display: flex; flex-direction: column; gap: 6px; padding: 22px; }
+  .stat .v { color: var(--gw-white); font: 600 1.8rem/1.1 var(--gw-font-sans); letter-spacing: -.02em; }
+  .stat .l { font-size: .9rem; }
+  .stat .m { display: flex; gap: 8px; align-items: center; }
+  .tbl-wrap { overflow-x: auto; margin-top: 28px; }
+  .cases { border-collapse: collapse; width: 100%; font-size: .88rem; min-width: 720px; }
+  .cases th, .cases td { padding: 10px 12px; border-bottom: 1px solid var(--gw-line); text-align: left; vertical-align: top; }
+  .cases th { color: var(--gw-white); font-weight: 500; }
+  .cases td:first-child { color: var(--gw-white); white-space: nowrap; }
+  .cases .desc { font-size: .82rem; max-width: 22ch; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; margin: 24px 0 16px; }
+  .seg button {
+    font: 500 .8rem/1 var(--gw-font-mono); color: var(--gw-steel); background: transparent;
+    border: 1px solid var(--gw-line-strong); border-radius: 4px; padding: .6em .9em; cursor: pointer;
+  }
+  .seg button[aria-selected="true"] { color: var(--gw-bg); background: var(--gw-teal); border-color: var(--gw-teal); }
+  .two { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 980px) { .two { grid-template-columns: 1fr 1fr; } }
+  .two .card { padding: 20px; }
+  .warn { max-width: 52rem; padding-left: 1.2em; }
+  .warn li { margin-bottom: .6em; }
+</style>

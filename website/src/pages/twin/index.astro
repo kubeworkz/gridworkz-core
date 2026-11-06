@@ -1,0 +1,216 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import Evidence from '../../components/twin/Evidence.astro';
+import {
+  loadTwin, loadScenario, obs, num, fmt, engineDomain, fileUrl,
+  DOMAINS, FIDELITIES, TWIN_REPO, TWIN_BRANCH, WEEK_S, type Domain, type TwinRun,
+} from '../../lib/twin';
+
+const { index, reason } = await loadTwin();
+const runs = index?.runs ?? [];
+
+// Which engines sit in which domain x fidelity cell, from the published runs.
+const cell = new Map<string, Set<string>>();
+for (const r of runs) for (const e of r.engines) {
+  const d = engineDomain(e.name);
+  if (!d) continue;
+  const k = `${d}:${e.fidelity}`;
+  if (!cell.has(k)) cell.set(k, new Set());
+  cell.get(k)!.add(e.name);
+}
+const engineCount = new Set(runs.flatMap((r) => r.engines.map((e) => e.name))).size;
+const obsCount = runs.reduce((n, r) => n + r.observation_count, 0);
+const evidence = runs.reduce<Record<string, number>>((acc, r) => {
+  for (const [k, v] of Object.entries(r.evidence_classes)) acc[k] = (acc[k] ?? 0) + (v ?? 0);
+  return acc;
+}, {});
+
+// Live numbers for the two featured slices.
+const yieldRun = await loadScenario(index, 'grx930_yield_wafer_map_28nm');
+const fab = await loadScenario(index, 'g100_factory_28nm');
+const Y = (m: string) => obs(yieldRun!.observations, 'wafer_map', 'grx930', m);
+const F = (m: string) => obs(fab!.observations, 'factory_case', 'baseline', m);
+
+// Every other published run, linked to its report.
+const featured = new Set(['grx930_yield_28nm', 'grx930_yield_wafer_map_28nm', 'grx930_yield_sensitivity_28nm', 'grx930_yield_variation_28nm', 'g100_factory_28nm']);
+const others = runs.filter((r) => !featured.has(r.scenario_id));
+const domainOf = (r: TwinRun): Domain | undefined => engineDomain(r.engines[0]?.name ?? '');
+const domainLabel = (d?: Domain) => DOMAINS.find((x) => x.id === d)?.label ?? '';
+const when = index ? `${new Date(index.generated_at).toISOString().slice(0, 16).replace('T', ' ')} UTC` : '';
+---
+<Base title="Digital twin" description="The Gridworkz fab digital twin: a 28 nm-class process model, wafer yield, packaging, photonics and a discrete-event fab for the GRX930, G100 and PTA, every number traced to a reproducible run.">
+  <PageHead eyebrow="Digital twin" title="A digital twin of how our chips get made.">
+    One platform for the process, the wafer, the package and the factory behind the GRX930, the G100 and the PTA.
+    Each question is a versioned scenario, each engine sits behind the same contract, and every number carries its units,
+    its model version and how far it has been proven.
+  </PageHead>
+
+  {!index ? (
+    <section style="padding-top:0"><div class="wrap"><div class="card pending">
+      <p><strong>No published run yet.</strong> The twin's CI publishes to <a href={TWIN_BRANCH}>kubeworkz/gpdk · twin-data</a> on every push to main; this page fills in from the next one.</p>
+      {reason && <p class="mono small">{reason}</p>}
+    </div></div></section>
+  ) : (
+    <>
+      <section style="padding-top:0">
+        <div class="wrap">
+          <div class="strip mono">
+            <span><b>{runs.length}</b> scenarios</span>
+            <span><b>{engineCount}</b> engines</span>
+            <span><b>{fmt.int(obsCount)}</b> observations</span>
+            <span>published {when}</span>
+            {index.commit && <a href={`${TWIN_REPO}/commit/${index.commit}`}>gpdk@{index.commit.slice(0, 7)}</a>}
+            {index.run_url && <a href={index.run_url}>CI run ↗</a>}
+          </div>
+          <p class="claim mono">{index.claim}</p>
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Live from the twin</span>
+          <h2>Two questions it answers today.</h2>
+          <div class="feature">
+            {yieldRun && (
+              <a class="card fcard" href="/twin/grx930-yield">
+                <span class="tag">GRX930 · wafer yield</span>
+                <h3>How many good GRX930s does a wafer give?</h3>
+                <div class="nums">
+                  <div><span class="v">{fmt.int(num(Y('good_packages_per_wafer')))}</span><span class="l">good packages per 300 mm wafer</span></div>
+                  <div><span class="v">{fmt.pct(num(Y('die_yield_mean')))}</span><span class="l">mean die yield</span></div>
+                  <div><span class="v">{fmt.usd(num(Y('cost_per_good_package_usd')))}</span><span class="l">per good package</span></div>
+                </div>
+                <span class="foot"><Evidence cls={Y('die_yield_mean').evidence_class} /> <span class="mono">wafer map, sensitivity, lot variation →</span></span>
+              </a>
+            )}
+            {fab && (
+              <a class="card fcard" href="/twin/factory">
+                <span class="tag">G100 · factory & ATP</span>
+                <h3>Where does the line wait, and does a fourth scanner pay?</h3>
+                <div class="nums">
+                  <div><span class="v">{(num(F('cycle_time_s')) / 86400).toFixed(1)} d</span><span class="l">cycle time at {(num(F('wafer_starts_per_s')) * WEEK_S).toFixed(0)} starts/week</span></div>
+                  <div><span class="v">{fmt.pct(num(F('bottleneck_tool_utilization')), 1)}</span><span class="l">bottleneck utilization</span></div>
+                  <div><span class="v">{fmt.usd(num(F('cost_per_good_package_usd')))}</span><span class="l">per good package</span></div>
+                </div>
+                <span class="foot"><Evidence cls={F('cycle_time_s').evidence_class} /> <span class="mono">what-ifs, tool groups, scanner case →</span></span>
+              </a>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Architecture</span>
+          <h2>Four domains, four fidelities.</h2>
+          <p class="lede">An engine can be an equation today, a calibrated surrogate next and a physics solver later, without changing the
+            scenario or the report. Fidelity is raised only where the sensitivity results say a decision depends on it.</p>
+          <div class="tbl-wrap">
+            <table class="grid">
+              <thead><tr><th></th>{FIDELITIES.map((f) => <th><span class="mono">{f.id}</span> {f.label}</th>)}</tr></thead>
+              <tbody>
+                {DOMAINS.map((d) => (
+                  <tr>
+                    <th scope="row">{d.label}</th>
+                    {FIDELITIES.map((f) => {
+                      const e = cell.get(`${d.id}:${f.id}`);
+                      return <td class={e ? 'on' : 'off'}>{e ? [...e].map((n) => <span class="mono eng">{n}</span>) : <span class="mono">planned</span>}</td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p class="small">Filled cells are engines in the current published runs. F2 brings layout-aware engines such as KLayout and
+            OpenROAD on real layouts; F3 brings physics such as TCAD for unit cells and FDTD for photonics.</p>
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Also in the twin</span>
+          <h2>Every published run.</h2>
+          <div class="runs">
+            {others.map((r) => (
+              <article class="card run">
+                <span class="tag">{r.product.toUpperCase()} · {domainLabel(domainOf(r))}</span>
+                <h3 class="mono">{r.scenario_id}</h3>
+                <p>{r.description}</p>
+                <span class="foot">
+                  {Object.entries(r.evidence_classes).map(([k, v]) => <><Evidence cls={k as never} /> <span class="mono small">{v}</span></>)}
+                  <span class="mono small">· {r.engines.map((e) => `${e.name} ${e.fidelity}`).join(', ')}</span>
+                </span>
+                <a class="mono" href={fileUrl(r.scenario_id, 'report.md')}>Report →</a>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap two">
+          <div>
+            <span class="eyebrow">Evidence</span>
+            <h2>How far each number has been proven.</h2>
+            <p>Every observation carries one evidence class. Today the twin runs on planning inputs, so its results are
+              <Evidence cls="assumed" />: use the rankings and directions, not the absolute values, until they are calibrated against
+              measured test structures and silicon. Calibrated values arrive as <Evidence cls="measured" />.</p>
+            <ul class="mono ev-count">{Object.entries(evidence).map(([k, v]) => <li><Evidence cls={k as never} /> {fmt.int(v)} observations</li>)}</ul>
+          </div>
+          <div>
+            <span class="eyebrow">Design layer</span>
+            <h2>The chips themselves.</h2>
+            <p>The twin's products are real, open designs you can run today.</p>
+            <ul class="links">
+              <li><a href="/playground/replays">Simulation replays</a>: the NPU, CPU and full-SoC test runs from CI</li>
+              <li><a href="/playground/npu-registers">GRX930 NPU registers</a>: the real RTL in your browser</li>
+              <li><a href="/playground/photonic">PTA photonic tile</a>: the error model behind the accelerator</li>
+              <li><a href="/technology">Technology</a>: what's built and how far it's proven</li>
+            </ul>
+            <p><a class="btn btn-ghost" href={TWIN_REPO}>The twin on GitHub ↗</a></p>
+          </div>
+        </div>
+      </section>
+    </>
+  )}
+</Base>
+
+<style>
+  .pending { max-width: 46rem; }
+  .small { font-size: .82rem; }
+  .strip { display: flex; flex-wrap: wrap; gap: 10px 24px; font-size: .82rem; }
+  .strip b { color: var(--gw-white); font-weight: 600; }
+  .claim { color: #ffb020; font-size: .8rem; margin-top: 12px; }
+  .feature { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 32px; }
+  @media (min-width: 900px) { .feature { grid-template-columns: 1fr 1fr; } }
+  .fcard { display: flex; flex-direction: column; gap: 12px; color: inherit; }
+  .fcard:hover { text-decoration: none; border-color: var(--gw-teal); }
+  .fcard h3 { margin: 0; }
+  .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 8px 0; }
+  .nums .v { display: block; color: var(--gw-white); font: 600 1.5rem/1.1 var(--gw-font-sans); }
+  .nums .l { font-size: .78rem; }
+  @media (max-width: 520px) { .nums { grid-template-columns: 1fr; } }
+  .foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: .8rem; color: var(--gw-teal); }
+  .tbl-wrap { overflow-x: auto; margin-top: 28px; }
+  .grid { border-collapse: separate; border-spacing: 4px; width: 100%; min-width: 680px; font-size: .86rem; }
+  .grid th { color: var(--gw-white); font-weight: 500; text-align: left; padding: 8px; }
+  .grid thead th .mono { color: var(--gw-teal); }
+  .grid td { padding: 10px; border-radius: 4px; vertical-align: top; }
+  .grid td.on { background: var(--gw-teal-dim); border: 1px solid #00f5d455; }
+  .grid td.off { border: 1px dashed var(--gw-line-strong); color: #5d6878; }
+  .eng { display: block; color: var(--gw-white); font-size: .78rem; }
+  .runs { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 32px; }
+  @media (min-width: 820px) { .runs { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1100px) { .runs { grid-template-columns: repeat(3, 1fr); } }
+  .run { display: flex; flex-direction: column; gap: 10px; }
+  .run h3 { font-size: .95rem; margin: 0; overflow-wrap: anywhere; }
+  .run p { font-size: .9rem; margin: 0; flex: 1; }
+  .run .foot { color: var(--gw-steel); }
+  .two { display: grid; gap: 48px; grid-template-columns: 1fr; }
+  @media (min-width: 900px) { .two { grid-template-columns: 1fr 1fr; } }
+  .ev-count { list-style: none; padding: 0; font-size: .85rem; }
+  .ev-count li { margin-bottom: 6px; }
+  .links { padding-left: 1.1em; }
+  .links li { margin-bottom: .5em; }
+</style>

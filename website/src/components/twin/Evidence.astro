@@ -1,0 +1,23 @@
+---
+// How far a number has been proven, from its observation's evidence class.
+import type { Evidence as EvidenceClass } from '../../lib/twin';
+interface Props { cls: EvidenceClass }
+const { cls } = Astro.props;
+const about: Record<EvidenceClass, string> = {
+  measured: 'Measured: from a test structure, a metrology record or silicon.',
+  vendor: 'Vendor data: from a supplier datasheet or quote.',
+  literature: 'Literature: from a published source.',
+  proxy: 'Proxy: measured on a related process or design, not this one.',
+  assumed: 'Assumed: a planning input or a model estimate built on planning inputs, not a measurement.',
+};
+---
+<span class={`ev ev-${cls}`} title={about[cls]}>{cls}</span>
+<style>
+  .ev {
+    font: 500 .66rem/1 var(--gw-font-mono); letter-spacing: .05em; text-transform: uppercase;
+    padding: 3px 6px; border-radius: 3px; border: 1px solid; vertical-align: middle; white-space: nowrap;
+  }
+  .ev-assumed { color: #ffb020; border-color: #ffb02066; }
+  .ev-proxy, .ev-literature, .ev-vendor { color: var(--gw-steel); border-color: var(--gw-line-strong); }
+  .ev-measured { color: var(--gw-green); border-color: #39ff1466; }
+</style>

@@ -1,0 +1,266 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import Evidence from '../../components/twin/Evidence.astro';
+import Provenance from '../../components/twin/Provenance.astro';
+import LineChart from '../../components/twin/LineChart.astro';
+import Tip from '../../components/twin/Tip.astro';
+import { loadTwin, loadScenario, loadArtifact, obs, num, fmt, TWIN_BRANCH, type Observation } from '../../lib/twin';
+
+const { index, reason } = await loadTwin();
+const base = await loadScenario(index, 'grx930_yield_28nm');
+const map = await loadScenario(index, 'grx930_yield_wafer_map_28nm');
+const sens = await loadScenario(index, 'grx930_yield_sensitivity_28nm');
+const vari = await loadScenario(index, 'grx930_yield_variation_28nm');
+const ready = !!(index && base && map && sens && vari);
+
+// Headline: the vertical-slice run.
+const P = (m: string) => obs(base!.observations, 'product', 'grx930', m);
+const headline = ready ? [
+  { o: P('gross_dies_per_wafer'), v: (o: Observation) => fmt.int(num(o)), label: 'Gross dies per 300 mm wafer' },
+  { o: P('die_yield'), v: (o: Observation) => fmt.pct(num(o)), label: 'Die yield' },
+  { o: P('good_packages_per_wafer'), v: (o: Observation) => fmt.int(num(o)), label: 'Good packages per wafer' },
+  { o: P('cost_per_good_package_usd'), v: (o: Observation) => fmt.usd(num(o)), label: 'Cost per good package' },
+] : [];
+const dieArea = ready ? num(P('die_area_m2')) : 0;
+const critArea = ready ? num(P('critical_area_m2')) : 0;
+
+// Wafer map: per-die positions and expected yield, packed for the canvas.
+let wafer = { pitch: 0, x0: 0, y0: 0, i: [] as number[], j: [] as number[], loss: [] as number[], radius: 150 };
+const zones: { zone: string; r: number; n: number; d0: number; y: number }[] = [];
+if (ready) {
+  const csv = (await loadArtifact('grx930_yield_wafer_map_28nm', 'wafer_map.csv')).trim().split('\n');
+  const head = csv[0].split(',');
+  const col = (n: string) => head.indexOf(n);
+  const rows = csv.slice(1).map((l) => l.split(','));
+  const xs = rows.map((r) => +r[col('x_mm')]), ys = rows.map((r) => +r[col('y_mm')]);
+  const ux = [...new Set(xs)].sort((a, b) => a - b);
+  const pitch = Math.min(...ux.slice(1).map((v, k) => v - ux[k]).filter((d) => d > 1e-6));
+  const x0 = Math.min(...xs), y0 = Math.min(...ys);
+  wafer = {
+    pitch, x0, y0, radius: 150,
+    i: xs.map((x) => Math.round((x - x0) / pitch)),
+    j: ys.map((y) => Math.round((y - y0) / pitch)),
+    loss: rows.map((r) => Math.round((1 - +r[col('expected_die_yield')]) * 1e5)),
+  };
+  const zr = map!.observations.filter((o) => o.entity_type === 'wafer_zone');
+  for (const id of [...new Set(zr.map((o) => o.entity_id))]) {
+    const g = (m: string) => num(obs(zr, 'wafer_zone', id, m));
+    zones.push({ zone: id.replace('zone:', ''), r: g('radius_mm'), n: g('die_count'), d0: g('defect_density_per_cm2'), y: g('die_yield') });
+  }
+}
+const W = (m: string) => obs(map!.observations, 'wafer_map', 'grx930', m);
+
+// Sensitivity: one curve per swept input, good packages per wafer on y.
+const series = (key: string, xMetric: string) => {
+  const rows = sens!.observations.filter((o) => o.entity_id.startsWith(`${key}:`));
+  return [...new Set(rows.map((o) => o.entity_id))].map((id) => {
+    const x = num(obs(rows, 'sensitivity_point', id, xMetric));
+    const gp = obs(rows, 'sensitivity_point', id, 'good_packages_per_wafer');
+    const dy = num(obs(rows, 'sensitivity_point', id, 'die_yield'));
+    const cost = num(obs(rows, 'sensitivity_point', id, 'cost_per_good_package_usd'));
+    return { x, y: num(gp), tip: `${xMetric.replace(/_/g, ' ')} ${x}\ngood packages/wafer ${fmt.int(num(gp))}${typeof gp.uncertainty === 'number' ? ` ± ${gp.uncertainty.toFixed(2)}` : ''}\ndie yield ${fmt.pct(dy, 3)}\ncost/good package ${fmt.usd(cost, 3)}` };
+  }).sort((a, b) => a.x - b.x);
+};
+const curves = ready ? [
+  { title: 'Defect density', xLabel: 'Defect density (per cm²)', pts: series('defect_density', 'defect_density_per_cm2'), xt: (v: number) => v.toFixed(2) },
+  { title: 'Pad count', xLabel: 'Pads', pts: series('pad_count', 'pad_count'), xt: (v: number) => String(v) },
+  { title: 'Assembly tolerance', xLabel: 'Assembly loss per pad (ppm)', pts: series('assembly_tolerance', 'assembly_per_pad_ppm'), xt: (v: number) => String(v) },
+] : [];
+const V = (m: string) => obs(vari!.observations, 'lot_simulation', 'grx930', m);
+const warnings = ready ? [...new Set([base!, map!, sens!, vari!].flatMap((s) => s.run.warnings))] : [];
+---
+<Base title="GRX930 wafer yield · Digital twin" description="GRX930 die and package yield on a 300 mm wafer at 28 nm: wafer map, defect sensitivity and lot variation from the Gridworkz fab digital twin.">
+  <PageHead eyebrow="Digital twin · GRX930 · yield" title="How many good GRX930s does a wafer give?">
+    A 300 mm wafer grid, Poisson critical-area die yield, per-pad assembly yield and cost per good package,
+    with seeded sampling uncertainty. Every number below comes from a fresh run of the twin and links to it.
+  </PageHead>
+
+  {!ready ? (
+    <section style="padding-top:0"><div class="wrap"><div class="card pending">
+      <p><strong>No published run yet.</strong> The twin's CI publishes to <a href={TWIN_BRANCH}>kubeworkz/gpdk · twin-data</a> on every push to main; this page fills in from the next one.</p>
+      {reason && <p class="mono small">{reason}</p>}
+    </div></div></section>
+  ) : (
+    <>
+      <section style="padding-top:0">
+        <div class="wrap">
+          <p class="claim mono">{index!.claim} · {base!.run.process}</p>
+          <div class="stats">
+            {headline.map((h) => (
+              <div class="card stat">
+                <span class="v">{h.v(h.o)}</span>
+                <span class="l">{h.label}</span>
+                <span class="m">
+                  <Evidence cls={h.o.evidence_class} />
+                  {typeof h.o.uncertainty === 'number' && <span class="mono u">± {h.o.metric === 'die_yield' ? fmt.pct(h.o.uncertainty, 4) : h.o.uncertainty.toPrecision(2)}</span>}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p class="note">Die area {fmt.mm2(dieArea)}, of which {fmt.mm2(critArea)} is modelled critical area. That small critical
+            area is why defect density moves yield so little here: the die is pad-limited, not logic-limited.</p>
+          <Provenance index={index!} scenario={base!} />
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap map-grid">
+          <div>
+            <span class="eyebrow">Wafer map</span>
+            <h2>Where on the wafer the yield goes.</h2>
+            <p>A radial defect-density profile, a three-lobe angular term and two defect clusters, all planning assumptions.
+              Brighter dies have a higher expected yield loss. Hover a die for its numbers.</p>
+            <dl class="kv">
+              <dt>Mean die yield</dt><dd>{fmt.pct(num(W('die_yield_mean')))} <Evidence cls={W('die_yield_mean').evidence_class} /></dd>
+              <dt>Center / edge</dt><dd>{fmt.pct(num(W('center_die_yield')))} / {fmt.pct(num(W('edge_die_yield')))}</dd>
+              <dt>Edge ÷ center</dt><dd>{fmt.fixed(num(W('edge_to_center_yield_ratio')), 4)}</dd>
+              <dt>Radial slope</dt><dd>{(num(W('radial_yield_slope_per_mm')) * 1e5).toFixed(1)}×10⁻⁵ per mm</dd>
+              <dt>Good packages</dt><dd>{fmt.int(num(W('good_packages_per_wafer')))} per wafer</dd>
+            </dl>
+            <div class="tbl-wrap">
+              <table class="mono zones">
+                <thead><tr><th>Zone</th><th>Outer radius</th><th>Dies</th><th>Defects / cm²</th><th>Die yield</th></tr></thead>
+                <tbody>{zones.map((z) => <tr><td>{z.zone}</td><td>{z.r.toFixed(1)} mm</td><td>{fmt.int(z.n)}</td><td>{z.d0.toFixed(3)}</td><td>{fmt.pct(z.y, 3)}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
+          <figure class="wafer" data-tip-host>
+            <canvas id="wafer" width="560" height="560" aria-label={`Wafer map of ${wafer.i.length} dies, expected yield loss per die`}></canvas>
+            <div class="legend mono">
+              <span>{(Math.min(...wafer.loss) / 1000).toFixed(2)}%</span>
+              <span class="ramp" aria-hidden="true"></span>
+              <span>{(Math.max(...wafer.loss) / 1000).toFixed(2)}%</span>
+              <span class="lt">expected yield loss per die</span>
+            </div>
+            <script type="application/json" id="wafer-data" set:html={JSON.stringify(wafer)} />
+          </figure>
+        </div>
+        <div class="wrap"><Provenance index={index!} scenario={map!} /></div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Sensitivity</span>
+          <h2>What moves the count of good packages.</h2>
+          <p class="lede">Each input swept on its own around the planning point; good packages per wafer on each chart's own scale.</p>
+          <div class="curves">
+            {curves.map((c) => (
+              <div class="card"><LineChart title={c.title} points={c.pts} xLabel={c.xLabel} yLabel="Good packages / wafer" xTick={c.xt} yTick={(v) => fmt.int(v)} /></div>
+            ))}
+          </div>
+          <Provenance index={index!} scenario={sens!} />
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Variation</span>
+          <h2>Lot to lot, wafer to wafer.</h2>
+          <p class="lede">{vari!.run.samples} samples: assembly lots of 25 wafers with lognormal defect-density and assembly variation.</p>
+          <div class="stats">
+            <div class="card stat"><span class="v">{fmt.pct(num(V('die_yield_mean')))}</span><span class="l">Mean die yield</span><span class="m"><Evidence cls={V('die_yield_mean').evidence_class} /></span></div>
+            <div class="card stat"><span class="v">{fmt.pct(num(V('wafer_to_wafer_die_yield_sigma')), 3)}</span><span class="l">Wafer-to-wafer σ</span><span class="m"><Evidence cls={V('wafer_to_wafer_die_yield_sigma').evidence_class} /></span></div>
+            <div class="card stat"><span class="v">{fmt.pct(num(V('lot_to_lot_die_yield_sigma')), 3)}</span><span class="l">Lot-to-lot σ</span><span class="m"><Evidence cls={V('lot_to_lot_die_yield_sigma').evidence_class} /></span></div>
+            <div class="card stat"><span class="v">{fmt.usd(num(V('cost_per_good_package_usd_mean')))}</span><span class="l">Mean cost per good package</span><span class="m"><Evidence cls={V('cost_per_good_package_usd_mean').evidence_class} /></span></div>
+          </div>
+          <Provenance index={index!} scenario={vari!} />
+        </div>
+      </section>
+
+      <section class="section-line">
+        <div class="wrap">
+          <span class="eyebrow">Limits</span>
+          <h2>What this model leaves out.</h2>
+          <ul class="warn">{warnings.map((w) => <li>{w}</li>)}</ul>
+          <p><a href="/twin">← The digital twin</a> · <a href="/twin/factory">The factory model →</a></p>
+        </div>
+      </section>
+    </>
+  )}
+  <Tip />
+</Base>
+
+<script>
+  const el = document.getElementById('wafer-data');
+  const canvas = document.getElementById('wafer') as HTMLCanvasElement | null;
+  if (el && canvas) {
+    const w = JSON.parse(el.textContent || '{}') as { pitch: number; x0: number; y0: number; i: number[]; j: number[]; loss: number[]; radius: number };
+    // Sequential single-hue ramp (blue 700 -> 100): low loss recedes into the surface.
+    const ramp = ['#0d366b', '#104281', '#184f95', '#1c5cab', '#256abf', '#2a78d6', '#3987e5', '#5598e7', '#6da7ec', '#86b6ef', '#9ec5f4', '#b7d3f6', '#cde2fb'];
+    const lo = Math.min(...w.loss), hi = Math.max(...w.loss);
+    const color = (l: number) => ramp[Math.min(ramp.length - 1, Math.floor(((l - lo) / (hi - lo || 1)) * ramp.length))];
+    const dpr = window.devicePixelRatio || 1, S = 560;
+    canvas.width = S * dpr; canvas.height = S * dpr;
+    const ctx = canvas.getContext('2d')!;
+    ctx.scale(dpr, dpr);
+    const k = (S - 20) / (2 * w.radius), c = S / 2;
+    const px = (mm: number) => c + mm * k, py = (mm: number) => c - mm * k;
+    const cell = w.pitch * k;
+    const draw = (hover = -1) => {
+      ctx.clearRect(0, 0, S, S);
+      ctx.beginPath(); ctx.arc(c, c, w.radius * k, 0, Math.PI * 2);
+      ctx.fillStyle = '#10121a'; ctx.fill(); ctx.strokeStyle = '#252a38'; ctx.lineWidth = 1; ctx.stroke();
+      for (let n = 0; n < w.i.length; n++) {
+        const x = w.x0 + w.i[n] * w.pitch, y = w.y0 + w.j[n] * w.pitch;
+        ctx.fillStyle = color(w.loss[n]);
+        ctx.fillRect(px(x) - cell / 2 + 0.5, py(y) - cell / 2 + 0.5, cell - 1, cell - 1);
+      }
+      if (hover >= 0) {
+        const x = w.x0 + w.i[hover] * w.pitch, y = w.y0 + w.j[hover] * w.pitch;
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
+        ctx.strokeRect(px(x) - cell / 2, py(y) - cell / 2, cell, cell);
+      }
+    };
+    draw();
+    const at = new Map<string, number>();
+    w.i.forEach((i, n) => at.set(`${i},${w.j[n]}`, n));
+    canvas.addEventListener('pointermove', (e) => {
+      const r = canvas.getBoundingClientRect();
+      const mx = ((e.clientX - r.left) / r.width) * S, my = ((e.clientY - r.top) / r.height) * S;
+      const xmm = (mx - c) / k, ymm = (c - my) / k;
+      const n = at.get(`${Math.round((xmm - w.x0) / w.pitch)},${Math.round((ymm - w.y0) / w.pitch)}`);
+      if (n === undefined) { draw(); window.dispatchEvent(new CustomEvent('twin-tip')); return; }
+      draw(n);
+      const x = w.x0 + w.i[n] * w.pitch, y = w.y0 + w.j[n] * w.pitch, rad = Math.hypot(x, y);
+      window.dispatchEvent(new CustomEvent('twin-tip', { detail: {
+        x: e.clientX, y: e.clientY,
+        text: `die ${n}\nx ${x.toFixed(1)} mm, y ${y.toFixed(1)} mm\nradius ${rad.toFixed(1)} mm\nexpected yield ${(100 - w.loss[n] / 1000).toFixed(3)}%`,
+      } }));
+    });
+    canvas.addEventListener('pointerleave', () => { draw(); window.dispatchEvent(new CustomEvent('twin-tip')); });
+  }
+</script>
+
+<style>
+  .pending { max-width: 46rem; }
+  .small { font-size: .8rem; }
+  .claim { color: #ffb020; font-size: .8rem; margin-bottom: 18px; }
+  .stats { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-top: 24px; }
+  .stat { display: flex; flex-direction: column; gap: 6px; padding: 22px; }
+  .stat .v { color: var(--gw-white); font: 600 1.9rem/1.1 var(--gw-font-sans); letter-spacing: -.02em; }
+  .stat .l { font-size: .9rem; }
+  .stat .m { display: flex; gap: 8px; align-items: center; }
+  .u { font-size: .75rem; color: var(--gw-steel); }
+  .note { margin-top: 20px; max-width: 52rem; }
+  .map-grid { display: grid; gap: 40px; grid-template-columns: 1fr; align-items: start; }
+  .map-grid > * { min-width: 0; }
+  @media (min-width: 960px) { .map-grid { grid-template-columns: 1fr 1.1fr; } }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 18px; margin: 18px 0 24px; }
+  .kv dt { color: var(--gw-steel); } .kv dd { margin: 0; color: var(--gw-white); }
+  .tbl-wrap { overflow-x: auto; }
+  .zones { border-collapse: collapse; font-size: .8rem; width: 100%; }
+  .zones th, .zones td { text-align: right; padding: 6px 10px; border-bottom: 1px solid var(--gw-line); white-space: nowrap; }
+  .zones th:first-child, .zones td:first-child { text-align: left; }
+  .zones th { color: var(--gw-white); font-weight: 500; }
+  .wafer { margin: 0; }
+  .wafer canvas { width: 100%; max-width: 560px; height: auto; aspect-ratio: 1; display: block; margin: 0 auto; touch-action: none; }
+  .legend { display: flex; align-items: center; gap: 10px; justify-content: center; margin-top: 12px; font-size: .75rem; flex-wrap: wrap; }
+  .ramp { width: 160px; height: 10px; border-radius: 2px; background: linear-gradient(90deg, #0d366b, #2a78d6, #cde2fb); }
+  .lt { width: 100%; text-align: center; }
+  .curves { display: grid; gap: 16px; grid-template-columns: 1fr; margin-top: 32px; }
+  @media (min-width: 980px) { .curves { grid-template-columns: repeat(3, 1fr); } }
+  .curves .card { padding: 20px; }
+  .warn { max-width: 52rem; padding-left: 1.2em; }
+  .warn li { margin-bottom: .6em; }
+</style>

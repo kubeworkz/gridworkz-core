@@ -1,0 +1,41 @@
+---
+// One shared hover/focus tooltip for any element with data-tip (charts, cells).
+---
+<div class="twin-tip mono" role="tooltip" hidden></div>
+<script>
+  const tip = document.querySelector<HTMLElement>('.twin-tip')!;
+  const show = (el: Element, x: number, y: number) => {
+    tip.textContent = el.getAttribute('data-tip');
+    tip.hidden = false;
+    const w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = `${Math.min(window.innerWidth - w - 8, Math.max(8, x + 14))}px`;
+    tip.style.top = `${Math.max(8, y - h - 12)}px`;
+  };
+  document.addEventListener('pointermove', (e) => {
+    const el = (e.target as Element).closest?.('[data-tip]');
+    if (el) show(el, e.clientX, e.clientY);
+    // A canvas drives the tip itself through the twin-tip event.
+    else if (!(e.target as Element).closest?.('[data-tip-host]')) tip.hidden = true;
+  });
+  document.addEventListener('focusin', (e) => {
+    const el = (e.target as Element).closest?.('[data-tip]');
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    show(el, r.left + r.width / 2, r.top);
+  });
+  document.addEventListener('focusout', () => { tip.hidden = true; });
+  window.addEventListener('twin-tip', ((e: CustomEvent) => {
+    if (!e.detail) { tip.hidden = true; return; }
+    tip.textContent = e.detail.text; tip.hidden = false;
+    tip.style.left = `${Math.min(window.innerWidth - tip.offsetWidth - 8, e.detail.x + 14)}px`;
+    tip.style.top = `${Math.max(8, e.detail.y - tip.offsetHeight - 12)}px`;
+  }) as EventListener);
+</script>
+<style is:global>
+  .twin-tip {
+    position: fixed; z-index: 100; pointer-events: none; max-width: 300px; white-space: pre-line;
+    background: #1a1d28; color: var(--gw-white); border: 1px solid var(--gw-line-strong);
+    border-radius: 4px; padding: 8px 10px; font-size: .76rem; line-height: 1.45;
+    box-shadow: 0 6px 24px #0008;
+  }
+</style>

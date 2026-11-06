@@ -5,24 +5,36 @@ import Architecture from '../components/Architecture.astro';
 import LabForm from '../components/LabForm.astro';
 import RepoStats from '../components/RepoStats.astro';
 import { site } from '../site';
+import { loadTwin, loadScenario, obs, num, fmt } from '../lib/twin';
+
+// Live numbers from the digital twin's latest published run (kubeworkz/gpdk).
+const { index: twin } = await loadTwin();
+const wm = await loadScenario(twin, 'grx930_yield_wafer_map_28nm');
+const fab = await loadScenario(twin, 'g100_factory_28nm');
+const tiles = [
+  wm && { v: fmt.int(num(obs(wm.observations, 'wafer_map', 'grx930', 'good_packages_per_wafer'))), l: 'good GRX930 packages per 300 mm wafer', href: '/twin/grx930-yield' },
+  fab && { v: `${(num(obs(fab.observations, 'factory_case', 'baseline', 'cycle_time_s')) / 86400).toFixed(1)} days`, l: 'G100 fab and assembly cycle time at 600 starts a week', href: '/twin/factory' },
+  twin && { v: String(twin.runs.length), l: 'scenarios, each a reproducible run with its inputs hashed', href: '/twin' },
+].filter(Boolean) as { v: string; l: string; href: string }[];
 ---
 <Base>
   <!-- 1. Hook -->
   <section class="hero">
     <div class="wrap hero-grid">
       <div>
-        <span class="eyebrow">[ GRX930 · G100 · GRXCP ]</span>
-        <h1>Open Silicon.<br />No NDAs.<br /><span class="hl">No Licensing Fees.</span></h1>
+        <span class="eyebrow">[ GRX930 · G100 · PTA · GRX28 ]</span>
+        <h1>Open silicon,<br />simulated from<br /><span class="hl">design to fab.</span></h1>
         <p class="lede">
-          Gridworkz is building the Linux of chip design: a quad-core RISC-V SoC with dual NPUs, an open RISC-V GPU,
-          and a photonic tensor accelerator in design, all on GitHub. Built for university labs and research teams.
+          Gridworkz builds open chips (a quad-core RISC-V SoC with dual NPUs, an open RISC-V GPU and a photonic tensor
+          accelerator in design) and the digital twin that models how they get made: a 28 nm-class process, wafer yield,
+          packaging and the factory. All on GitHub, every number traced to a reproducible run.
         </p>
         <div class="btn-row">
-          <a class="btn btn-primary" href={site.githubOrg}>Get the hardware on GitHub ↗</a>
-          <a class="btn btn-ghost" href="/manifesto">Read the manifesto</a>
+          <a class="btn btn-primary" href="/twin">Explore the digital twin →</a>
+          <a class="btn btn-ghost" href={site.githubOrg}>Get the hardware on GitHub ↗</a>
         </div>
         <ul class="chips mono">
-          <li>Apache 2.0</li><li>RISC-V</li><li>SystemVerilog</li><li>Icarus Verilog</li><li>Verilator</li>
+          <li>Apache 2.0</li><li>RISC-V</li><li>28 nm-class twin</li><li>SimPy</li><li>OpenROAD</li><li>Verilator</li>
         </ul>
       </div>
       <!-- 2. Proof -->
@@ -32,6 +44,26 @@ import { site } from '../site';
 
   <!-- Live GitHub stats (off until site.showRepoStats is true) -->
   <RepoStats />
+
+  <!-- The digital twin: live numbers from its latest published run -->
+  <section class="section-line">
+    <div class="wrap">
+      <span class="eyebrow">The digital twin</span>
+      <h2>Ask how a chip will be made<br />before anyone makes it.</h2>
+      <p class="lede">
+        Process, wafer, package and factory models behind one contract. Each question is a versioned scenario; each answer
+        carries its units, model version and evidence class. Today's inputs are planning assumptions, labelled as such.
+      </p>
+      {tiles.length > 0 && (
+        <div class="bento twin-tiles" style="margin-top:40px">
+          {tiles.map((t) => (
+            <a class="card twin-tile" href={t.href}><span class="tv">{t.v}</span><span>{t.l}</span><span class="mono tk">assumed inputs · see the run →</span></a>
+          ))}
+        </div>
+      )}
+      <div class="btn-row"><a class="btn btn-ghost" href="/twin">Open the digital twin →</a></div>
+    </div>
+  </section>
 
   <!-- Zero-cost pitch -->
   <section class="section-line">
@@ -158,6 +190,10 @@ import { site } from '../site';
   @media (min-width: 1000px) { .hero-grid { grid-template-columns: 1.05fr 1fr; } }
   .hero-grid > * { min-width: 0; }
   .hl { color: var(--gw-teal); }
+  .twin-tile { display: flex; flex-direction: column; gap: 8px; color: inherit; }
+  .twin-tile:hover { text-decoration: none; border-color: var(--gw-teal); }
+  .twin-tile .tv { color: var(--gw-white); font: 600 2rem/1.1 var(--gw-font-sans); letter-spacing: -.02em; }
+  .twin-tile .tk { font-size: .72rem; color: #ffb020; margin-top: auto; }
   .card code { font-family: var(--gw-font-mono); font-size: .85em; color: var(--gw-white); }
   .card-link { font-size: .82rem; }
   .chips { list-style: none; padding: 0; margin: 32px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }

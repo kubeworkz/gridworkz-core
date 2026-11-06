@@ -1,0 +1,50 @@
+---
+// Where a page's numbers came from: the run, its engines, inputs and files.
+import type { TwinIndex, TwinScenario } from '../../lib/twin';
+import { fileUrl, TWIN_REPO } from '../../lib/twin';
+interface Props { index: TwinIndex; scenario: TwinScenario }
+const { index, scenario } = Astro.props;
+const { run, manifest } = scenario;
+const scenarioPath = manifest.inputs.find((i) => i.role === 'scenario')?.path ?? '';
+const commit = index.commit ?? '';
+const srcUrl = (p: string) => (commit ? `${TWIN_REPO}/blob/${commit}/${p}` : `${TWIN_REPO}/blob/main/${p}`);
+const files = run.files.map((f) => f.path.split('/').pop()!);
+---
+<details class="prov card">
+  <summary class="mono">How this was computed · <span class="rid">{run.run_id}</span></summary>
+  <dl>
+    <dt>Engine</dt>
+    <dd>{run.engines.map((e) => <span class="mono">{e.name} {e.version} · {e.fidelity} · {e.model_version}</span>)}</dd>
+    <dt>Scenario</dt>
+    <dd><a class="mono" href={srcUrl(scenarioPath)}>{scenarioPath}</a> · seed {run.seed} · {run.samples} samples</dd>
+    <dt>Inputs</dt>
+    <dd>
+      <ul class="mono">
+        {manifest.inputs.map((i) => (
+          <li><span class="role">{i.role}</span> <a href={srcUrl(i.path)}>{i.path}</a> <span class="sha" title={i.sha256}>{i.sha256.slice(0, 12)}</span></li>
+        ))}
+      </ul>
+    </dd>
+    <dt>Observations</dt>
+    <dd class="mono">{run.observation_count} · fingerprint <span class="sha" title={run.fingerprint_sha256}>{run.fingerprint_sha256.slice(0, 12)}</span></dd>
+    <dt>Files</dt>
+    <dd>{files.map((f, i) => <>{i > 0 && ' · '}<a class="mono" href={fileUrl(run.scenario_id, f)}>{f}</a></>)}</dd>
+    <dt>Reproduce</dt>
+    <dd><code>git checkout {commit ? commit.slice(0, 12) : 'main'} &amp;&amp; python -m fabtwin run {scenarioPath}</code></dd>
+    {index.run_url && <><dt>CI run</dt><dd><a href={index.run_url}>{index.run_url.replace('https://github.com/', '')}</a></dd></>}
+  </dl>
+</details>
+<style>
+  .prov { padding: 18px 22px; margin-top: 24px; }
+  summary { cursor: pointer; color: var(--gw-white); font-size: .85rem; }
+  .rid { color: var(--gw-steel); }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 18px 0 0; font-size: .88rem; }
+  dt { color: var(--gw-white); }
+  dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  dd span.mono { display: block; }
+  ul { list-style: none; margin: 0; padding: 0; font-size: .82rem; }
+  .role { color: var(--gw-steel); display: inline-block; min-width: 5.5em; }
+  .sha { color: var(--gw-steel); }
+  code { font-size: .8rem; }
+  @media (max-width: 600px) { dl { grid-template-columns: 1fr; } dt { margin-top: 8px; } }
+</style>
