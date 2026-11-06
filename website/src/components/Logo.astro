@@ -1,0 +1,13 @@
+---
+import mark from '../assets/logo-mark.svg?raw';
+---
+<a href="/" class="logo" aria-label="Gridworkz home">
+  <span class="mark" set:html={mark} />
+  <span class="word">GRIDWORKZ</span>
+</a>
+<style>
+  .logo { display: inline-flex; align-items: center; gap: 10px; color: var(--gw-white); }
+  .logo:hover { text-decoration: none; }
+  .mark :global(svg) { width: 26px; height: 26px; display: block; }
+  .word { font: 600 1rem/1 var(--gw-font-mono); letter-spacing: .14em; }
+</style>

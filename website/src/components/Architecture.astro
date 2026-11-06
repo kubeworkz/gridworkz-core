@@ -1,0 +1,135 @@
+---
+import { site } from '../site';
+// Facts below come from the grx930 and grxgpu READMEs and design docs.
+// Keep them in step with those repos; status words matter more than adjectives.
+const blocks = [
+  {
+    id: 'riscv', name: 'Quad-Core RISC-V64', sub: 'GRX930 · RV64IMAC', area: 'a',
+    body: 'Four RV64IMAC cores, each a 5-stage in-order pipeline with its own I- and D-cache, atomics (AMO/LR/SC) and a shared 4-way L2 with coherence. No secret microcode: every module is SystemVerilog you can read and simulate.',
+    src: { href: `${site.hw.soc}/tree/main/rv64imac/RTL`, path: 'grx930/rv64imac/RTL', text: 'RTL source' },
+    links: [['Memory map', '/docs/hardware/riscv64'], ['Pinout', '/docs/hardware/pinout']],
+    facts: [['ISA', 'RV64IMAC'], ['Cores', '4 × 5-stage in-order'], ['FPGA', '~121 MHz, timing closed (Artix-7)']],
+  },
+  {
+    id: 'npu', name: 'Dual NPU', sub: 'GRX930 · systolic GEMM', area: 'b',
+    body: 'Two 8×8 systolic-array GEMM engines on the SoC\'s AXI4 fabric, each with its own DMA, command queue and activation unit. Verified with an 18-case shape and precision sweep.',
+    src: { href: `${site.hw.soc}/tree/main/c930/rtl`, path: 'grx930/c930/rtl', text: 'RTL source' },
+    links: [['Register map', '/docs/hardware/npu'], ['Pinout', '/docs/hardware/pinout']],
+    facts: [['Units', '2 × 8×8 PEs'], ['Datatypes', 'INT4 · INT8 · INT16 · FP16 · BF16'], ['Interface', 'AXI4-Lite CSR + AXI4 DMA']],
+  },
+  {
+    id: 'g100', name: 'G100 GPU', sub: 'GRXGPU · Vortex-based', area: 'c',
+    body: 'An open RISC-V GPU built on Vortex, with warp-group tensor cores (WGMMA), an asynchronous data-transfer accelerator (DXA), ray tracing and a graphics pipeline. Discovery configuration: one cluster of four cores, where tensor-core SGEMM passes against a host reference in simulation.',
+    src: { href: `${site.hw.gpu}/tree/main/hw/rtl`, path: 'grxgpu/hw/rtl', text: 'RTL source' },
+    links: [['G100 docs', '/docs/hardware/g100']],
+    facts: [['Tensor formats', 'fp32 · tf32 · fp16 · bf16 · fp8 · bf8 · int8'], ['Discovery config', '1 cluster × 4 cores, TCU + DXA'], ['Status', 'Simulation (SimX, RTL)']],
+  },
+  {
+    id: 'photonic', name: 'Photonic Tensor Accelerator', sub: 'PTA · in design', area: 'd',
+    body: 'A photonic GEMM tile planned as a chiplet beside the G100, reached over a die-to-die link. Today it exists as an error model: its output error is measured against a frozen MNIST test case before any hardware is built.',
+    src: { href: `${site.hw.gpu}/tree/main/docs/proposals`, path: 'grxgpu/docs/proposals', text: 'Design proposals' },
+    links: [['PTA docs', '/docs/hardware/pta']],
+    facts: [['Tile', '128 × 64'], ['Status', 'Error model, no hardware yet'], ['Software path', 'GRXCP grxBLAS (int8 GEMM)']],
+  },
+];
+---
+<div class="arch" data-arch>
+  <div class="diagram" role="group" aria-label="Gridworkz platform block diagram">
+    <div class="board-label mono">GRIDWORKZ PLATFORM</div>
+    <div class="grid">
+      {blocks.map((b, i) => (
+        <button type="button" class={`blk blk-${b.area}`} data-id={b.id} aria-pressed={i === 0 ? 'true' : 'false'}>
+          <span class="tag">{b.sub}</span>
+          <span class="nm">{b.name}</span>
+        </button>
+      ))}
+      <span class="bus bus-h mono" aria-hidden="true">◄ AXI4 ►</span>
+      <span class="bus bus-v1" aria-hidden="true"></span>
+      <span class="bus bus-v2" aria-hidden="true"></span>
+    </div>
+    <p class="hint mono">Select a block to view its source, docs and status →</p>
+  </div>
+  <aside class="panel" aria-live="polite">
+    {blocks.map((b, i) => (
+      <div class="pane" data-pane={b.id} hidden={i !== 0}>
+        <span class="tag">{b.sub}</span>
+        <h3>{b.name}</h3>
+        <p>{b.body}</p>
+        <dl>{b.facts.map(([k, v]) => (<><dt>{k}</dt><dd class="mono">{v}</dd></>))}</dl>
+        <div class="links">
+          <a class="mono" href={b.src.href}>{b.src.text} ↗<small>{b.src.path}</small></a>
+          {b.links.map(([label, href]) => <a class="mono" href={href}>{label} →</a>)}
+        </div>
+      </div>
+    ))}
+  </aside>
+</div>
+<style>
+  .arch { display: grid; gap: 20px; grid-template-columns: 1fr; }
+  @media (min-width: 960px) { .arch { grid-template-columns: 1.55fr 1fr; } }
+  .diagram {
+    position: relative; border: 1px dashed var(--gw-line-strong); border-radius: 10px;
+    padding: 44px 20px 20px; background: #0b0d13;
+  }
+  .board-label { position: absolute; top: 14px; left: 20px; font-size: .72rem; letter-spacing: .14em; color: var(--gw-steel); }
+  .grid {
+    position: relative; display: grid; gap: 56px 64px;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: 'a b' 'c c';
+  }
+  .blk {
+    all: unset; box-sizing: border-box; cursor: pointer; position: relative; z-index: 1;
+    display: flex; flex-direction: column; gap: 8px; padding: 18px;
+    border: 1px solid var(--gw-line-strong); border-radius: var(--gw-radius);
+    background: var(--gw-surface); transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  .blk:hover, .blk:focus-visible { border-color: var(--gw-teal); }
+  .blk[aria-pressed='true'] { border-color: var(--gw-teal); background: #0f1d1d; box-shadow: 0 0 0 1px var(--gw-teal), 0 0 32px -6px #00f5d466; }
+  .nm { color: var(--gw-white); font-weight: 600; font-size: 1.05rem; }
+  .blk-a { grid-area: a; } .blk-b { grid-area: b; }
+  .blk-c { grid-area: c; padding-bottom: 104px; }
+  .blk-d {
+    grid-area: c; align-self: end; margin: 0 18px 18px;
+    border-style: dashed; background: #0c1418;
+  }
+  .bus { position: absolute; z-index: 0; }
+  .bus-h {
+    top: 34px; left: calc(50% - 32px); width: 64px; text-align: center;
+    font-size: .6rem; color: var(--gw-teal); white-space: nowrap; overflow: visible;
+    display: flex; justify-content: center;
+  }
+  .bus-v1, .bus-v2 { width: 2px; height: 56px; background: linear-gradient(var(--gw-teal), transparent); top: calc(50% - 56px); }
+  .grid { grid-template-rows: auto auto; }
+  .bus-v1 { left: 25%; } .bus-v2 { left: 75%; }
+  .hint { font-size: .72rem; margin: 18px 0 0; }
+  @media (max-width: 560px) {
+    .grid { gap: 40px 14px; }
+    .bus-h { display: none; }
+    .blk { padding: 14px; }
+    .nm { font-size: .95rem; }
+  }
+  .panel {
+    border: 1px solid var(--gw-line); border-radius: 10px; padding: 28px;
+    background: var(--gw-surface); min-height: 100%;
+  }
+  .pane h3 { margin-top: 8px; font-size: 1.4rem; }
+  dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 18px; margin: 18px 0 24px; font-size: .88rem; }
+  dt { color: var(--gw-steel); } dd { margin: 0; color: var(--gw-white); }
+  .links { display: grid; gap: 8px; }
+  .links a {
+    display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; font-size: .82rem;
+    border: 1px solid var(--gw-line-strong); border-radius: var(--gw-radius);
+  }
+  .links a:hover { border-color: var(--gw-teal); text-decoration: none; }
+  .links small { color: var(--gw-steel); }
+</style>
+<script>
+  document.querySelectorAll<HTMLElement>('[data-arch]').forEach((root) => {
+    const btns = root.querySelectorAll<HTMLButtonElement>('.blk');
+    const panes = root.querySelectorAll<HTMLElement>('[data-pane]');
+    btns.forEach((b) => b.addEventListener('click', () => {
+      btns.forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      panes.forEach((p) => (p.hidden = p.dataset.pane !== b.dataset.id));
+    }));
+  });
+</script>

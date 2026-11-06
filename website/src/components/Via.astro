@@ -1,0 +1,46 @@
+---
+// Via: the Gridworkz mascot. Stands for the AI agents that build the chips.
+// Drawn in the same circuit-trace style as the logo. A "via" is the tiny
+// connection between layers of a chip.
+interface Props { size?: number; class?: string; animated?: boolean; }
+const { size = 96, class: className, animated = true } = Astro.props;
+---
+<svg
+  class:list={['via', className, { animated }]}
+  width={size} height={size} viewBox="0 0 64 64" fill="none"
+  role="img" aria-label="Via, the Gridworkz AI mascot"
+>
+  <g stroke="#00F5D4" stroke-width="2" stroke-linecap="square">
+    <!-- antenna -->
+    <path d="M32 12V7" />
+    <!-- head (a chip package) -->
+    <rect x="12" y="12" width="40" height="30" rx="3" />
+    <!-- pins -->
+    <path d="M8 20h4M8 27h4M8 34h4M52 20h4M52 27h4M52 34h4" stroke-width="1.5" />
+    <!-- smile: a routed trace -->
+    <path d="M25 33v3h14v-3" stroke-width="1.75" />
+    <!-- neck + body -->
+    <path d="M32 42v4" />
+    <rect x="22" y="46" width="20" height="10" rx="2" />
+    <path d="M26 60v-4M32 60v-4M38 60v-4" stroke-width="1.5" />
+    <!-- body trace -->
+    <path d="M26 51h6v-2h6" stroke-width="1.25" opacity=".6" />
+  </g>
+  <!-- antenna via pad -->
+  <circle cx="32" cy="5" r="2.75" stroke="#00F5D4" stroke-width="1.5" />
+  <circle class="pulse" cx="32" cy="5" r="1.1" fill="#39FF14" />
+  <!-- eyes are vias: a ring with a drilled centre -->
+  <g class="eyes">
+    <circle cx="24" cy="24" r="4" stroke="#00F5D4" stroke-width="1.75" />
+    <circle cx="24" cy="24" r="1.5" fill="#00F5D4" />
+    <circle cx="40" cy="24" r="4" stroke="#00F5D4" stroke-width="1.75" />
+    <circle cx="40" cy="24" r="1.5" fill="#00F5D4" />
+  </g>
+</svg>
+<style>
+  .via { display: block; overflow: visible; }
+  .animated .pulse { animation: via-pulse 2.4s ease-in-out infinite; }
+  .animated .eyes { transform-origin: 32px 24px; animation: via-blink 5s infinite; }
+  @keyframes via-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+  @keyframes via-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+</style>

@@ -1,0 +1,18 @@
+/* Brand colours for the docs. Dark is the default; light mode keeps Starlight's greys. */
+:root:not([data-theme='light']) {
+  --sl-color-accent-low: #00342d;
+  --sl-color-accent: var(--gw-teal);
+  --sl-color-accent-high: #b3fff4;
+  --sl-color-black: var(--gw-bg);
+  --sl-color-gray-6: var(--gw-line);
+  --sl-color-gray-5: var(--gw-line-strong);
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #c8fff6;
+  --sl-color-accent: #007a6a;
+  --sl-color-accent-high: #00332c;
+}
+:root {
+  --sl-font: var(--gw-font-sans);
+  --sl-font-mono: var(--gw-font-mono);
+}

@@ -1,0 +1,32 @@
+---
+import Base from '../layouts/Base.astro';
+import { site } from '../site';
+---
+<Base title="Manifesto" description="Why Gridworkz is building the Linux of chip design.">
+  <article class="wrap m">
+    <span class="eyebrow">[ The hardware manifesto ]</span>
+    <h1>Stop buying black boxes.</h1>
+    <p class="big">Software went open three decades ago. Silicon never did.</p>
+    <p>Today, a PhD student who wants to test a new quantization scheme on real hardware has to sign NDAs, license EDA suites that cost more than their lab, and work around microcode they're never allowed to see. Most good ideas in computer architecture die in that gap, before anyone tests them.</p>
+    <h2>We think chip design should work like Linux.</h2>
+    <p>Gridworkz publishes everything: the RTL for the GRX930 RISC-V SoC and its NPUs, the G100 GPU, the design work on the photonic tensor accelerator, the GRXCP runtime and compiler, the testbenches, the constraint files and the errata. All of it is under Apache 2.0. Fork it, simulate it, or tape it out.</p>
+    <ol class="tenets mono">
+      <li><span>01</span>Every register is documented. Every block has source.</li>
+      <li><span>02</span>Simulation and verification run on open-source tools: Icarus Verilog, Verilator, SymbiYosys.</li>
+      <li><span>03</span>Apache 2.0. No NDAs, no royalties, no license servers.</li>
+      <li><span>04</span>Errata are published, not hidden.</li>
+      <li><span>05</span>Researchers come first. Results come back to the commons.</li>
+    </ol>
+    <h2>Start building the future of hardware.</h2>
+    <p>Clone the repo. Run your first simulation in ten minutes. Then tell us what you'd change.</p>
+    <div class="btn-row"><a class="btn btn-primary" href={site.githubOrg}>Get the hardware on GitHub ↗</a><a class="btn btn-ghost" href="/docs">Read the docs</a></div>
+  </article>
+</Base>
+<style>
+  .m { max-width: 760px; padding-top: 88px; padding-bottom: 64px; }
+  .big { font-size: 1.5rem; color: var(--gw-white); }
+  h2 { margin-top: 56px; font-size: 1.8rem; }
+  .tenets { list-style: none; padding: 0; margin: 32px 0; border-top: 1px solid var(--gw-line); }
+  .tenets li { display: flex; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--gw-line); color: var(--gw-white); font-size: .92rem; }
+  .tenets span { color: var(--gw-teal); }
+</style>

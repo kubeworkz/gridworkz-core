@@ -1,0 +1,93 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import Via from '../components/Via.astro';
+import { getBuildLog, weekStart, type Shipped } from '../lib/buildLog';
+import { site } from '../site';
+
+const { items, source } = await getBuildLog();
+
+const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) => d.toLocaleDateString('en-US', { timeZone: 'UTC', ...opts });
+const weeks = new Map<string, Shipped[]>();
+for (const it of items) {
+  const k = weekStart(it.mergedAt).toISOString();
+  weeks.set(k, [...(weeks.get(k) ?? []), it]);
+}
+const first = items.at(-1)?.mergedAt;
+const builtAt = new Date();
+---
+<Base title="Build log" description="Everything Dave and Via have shipped on Gridworkz, week by week, pulled straight from GitHub.">
+  <PageHead eyebrow="Build log" title="What shipped, week by week.">
+    Every change to Gridworkz lands as a pull request on GitHub, reviewed and signed off by Dave.
+    This page lists them all, straight from the repo.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      {items.length > 0 && (
+        <dl class="stats mono">
+          <div><dt>Pull requests merged</dt><dd>{items.length}</dd></div>
+          <div><dt>Weeks active</dt><dd>{weeks.size}</dd></div>
+          {first && <div><dt>Building since</dt><dd>{fmt(first, { month: 'short', year: 'numeric' })}</dd></div>}
+        </dl>
+      )}
+
+      {items.length === 0 ? (
+        <div class="card empty">
+          <Via size={72} />
+          <p>The log couldn't be loaded for this build. See the full history <a href={`${site.repo}/pulls?q=is%3Apr+is%3Amerged`}>on GitHub</a>.</p>
+        </div>
+      ) : (
+        [...weeks].map(([wk, list]) => (
+          <section class="week">
+            <h2 class="wk mono">Week of {fmt(new Date(wk), { month: 'long', day: 'numeric', year: 'numeric' })}</h2>
+            <ol class="entries">
+              {list.map((it) => (
+                <li class="entry">
+                  <time class="mono" datetime={it.mergedAt.toISOString()}>{fmt(it.mergedAt, { month: 'short', day: 'numeric' })}</time>
+                  <div>
+                    <a class="title" href={it.url}>{it.title}</a>
+                    {it.summary && <p>{it.summary}</p>}
+                  </div>
+                  <a class="num mono" href={it.url}>#{it.number}</a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))
+      )}
+
+      <p class="src mono">
+        {source === 'github' && 'From GitHub pull requests.'}
+        {source === 'git' && 'From the repository\'s git history.'}
+        {' '}Updated {fmt(builtAt, { month: 'short', day: 'numeric', year: 'numeric' })}, each time the site deploys.
+        {' '}<a href={`${site.repo}/commits/main`}>Every commit ↗</a>
+      </p>
+    </div>
+  </section>
+</Base>
+<style>
+  .stats { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 48px; }
+  .stats div { background: var(--gw-surface); border: 1px solid var(--gw-line); border-radius: var(--gw-radius); padding: 16px 20px; min-width: 170px; }
+  .stats dt { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gw-steel); }
+  .stats dd { margin: 6px 0 0; font-size: 1.6rem; color: var(--gw-teal); font-weight: 600; }
+  .week { padding: 0 0 36px; }
+  .wk { font-size: .8rem; letter-spacing: .1em; text-transform: uppercase; color: var(--gw-teal); font-weight: 500; margin-bottom: 8px; }
+  .entries { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--gw-line); }
+  .entry { display: grid; grid-template-columns: 64px 1fr auto; gap: 4px 20px; padding: 18px 0; border-bottom: 1px solid var(--gw-line); align-items: baseline; }
+  .entry time { font-size: .8rem; color: var(--gw-steel); }
+  .entry .title { color: var(--gw-white); font-weight: 500; }
+  .entry .title:hover { color: var(--gw-teal); text-decoration: none; }
+  .entry p { margin: 6px 0 0; font-size: .92rem; }
+  .num { font-size: .8rem; color: var(--gw-steel); }
+  .num:hover { color: var(--gw-teal); }
+  @media (max-width: 560px) {
+    .entry { grid-template-columns: 1fr auto; }
+    .entry time { grid-column: 1; }
+    .entry > div { grid-column: 1 / -1; grid-row: 2; }
+    .num { grid-row: 1; grid-column: 2; }
+  }
+  .empty { display: flex; gap: 20px; align-items: center; }
+  .empty p { margin: 0; }
+  .src { font-size: .75rem; margin-top: 16px; }
+</style>

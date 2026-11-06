@@ -1,0 +1,15 @@
+---
+interface Props { eyebrow: string; title: string; }
+const { eyebrow, title } = Astro.props;
+---
+<section class="ph">
+  <div class="wrap">
+    <span class="eyebrow">{eyebrow}</span>
+    <h1>{title}</h1>
+    <div class="lede"><slot /></div>
+  </div>
+</section>
+<style>
+  .ph { padding: 80px 0 48px; }
+  h1 { font-size: clamp(2.1rem, 4.6vw, 3.4rem); max-width: 22ch; }
+</style>

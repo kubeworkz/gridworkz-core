@@ -1,0 +1,305 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import map from '../../data/cuda-map.json';
+import { site } from '../../site';
+
+const examples = {
+  vecadd: `#include <cuda_runtime.h>
+#include <cstdio>
+
+__global__ void vecAdd(const float* a, const float* b, float* c, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i < n) c[i] = a[i] + b[i];
+}
+
+int main() {
+  const int n = 1 << 20;
+  float *a, *b, *c;
+  cudaMalloc(&a, n * sizeof(float));
+  cudaMalloc(&b, n * sizeof(float));
+  cudaMalloc(&c, n * sizeof(float));
+  vecAdd<<<(n + 255) / 256, 256>>>(a, b, c, n);
+  cudaDeviceSynchronize();
+  printf("%s\\n", cudaGetErrorString(cudaGetLastError()));
+  cudaFree(a); cudaFree(b); cudaFree(c);
+}`,
+  reduce: `#include <cuda_runtime.h>
+
+__global__ void sum(const float* in, float* out, int n) {
+  __shared__ float partial[32];
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  float v = i < n ? in[i] : 0.0f;
+  for (int o = warpSize / 2; o > 0; o /= 2)
+    v += __shfl_down_sync(0xffffffff, v, o);
+  if (threadIdx.x % warpSize == 0) partial[threadIdx.x / warpSize] = v;
+  __syncthreads();
+  if (threadIdx.x == 0) {
+    float s = 0;
+    for (int w = 0; w < blockDim.x / warpSize; ++w) s += partial[w];
+    atomicAdd(out, s);
+  }
+}
+
+int main() {
+  float *in, *out;
+  cudaMalloc(&in, 4096 * sizeof(float));
+  cudaMalloc(&out, sizeof(float));
+  cudaMemset(out, 0, sizeof(float));
+  sum<<<16, 256>>>(in, out, 4096);
+  cudaDeviceSynchronize();
+}`,
+  cublas: `#include <cuda_runtime.h>
+#include <cublas_v2.h>
+
+int main() {
+  const int n = 512;
+  float *A, *B, *C;
+  cudaMalloc(&A, n * n * sizeof(float));
+  cudaMalloc(&B, n * n * sizeof(float));
+  cudaMalloc(&C, n * n * sizeof(float));
+
+  cublasHandle_t h;
+  cublasCreate(&h);
+  const float alpha = 1.0f, beta = 0.0f;
+  cublasSgemm(h, CUBLAS_OP_N, CUBLAS_OP_N, n, n, n,
+              &alpha, A, n, B, n, &beta, C, n);
+  cublasDestroy(h);
+
+  cudaStream_t s;
+  cudaStreamCreate(&s);
+  cudaGraph_t g;
+  cudaStreamBeginCapture(s, cudaStreamCaptureModeGlobal);
+  cudaStreamEndCapture(s, &g);
+}`,
+  wmma: `#include <cuda_runtime.h>
+#include <mma.h>
+using namespace nvcuda;
+
+__constant__ float scale[16];
+
+__global__ void tile(const half* a, const half* b, float* c) {
+  wmma::fragment<wmma::matrix_a, 16, 16, 16, half, wmma::row_major> fa;
+  wmma::fragment<wmma::matrix_b, 16, 16, 16, half, wmma::col_major> fb;
+  wmma::fragment<wmma::accumulator, 16, 16, 16, float> fc;
+  wmma::fill_fragment(fc, 0.0f);
+  wmma::load_matrix_sync(fa, a, 16);
+  wmma::load_matrix_sync(fb, b, 16);
+  wmma::mma_sync(fc, fa, fb, fc);
+  wmma::store_matrix_sync(c, fc, 16, wmma::mem_row_major);
+}
+
+int main() {
+  float host[16] = {1};
+  cudaMemcpyToSymbol(scale, host, sizeof(host));
+}`,
+};
+---
+<Base title="CUDA porting checker" description="Paste CUDA code and see how much of it runs on GRXCP, the CUDA-style platform for the G100 GPU. Runs in your browser.">
+  <PageHead eyebrow="Playground · CUDA porting checker" title="How much of your CUDA runs on GRXCP?">
+    Paste a CUDA file. Every CUDA name in it is checked against GRXCP's compatibility header and its
+    <a href={map.docs}>mapping and gap register</a>. Your code stays in your browser.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap checker">
+      <div class="editor">
+        <div class="ed-bar">
+          <span class="mono lbl">your_kernel.cu</span>
+          <span class="ex mono">
+            Examples:
+            <button type="button" data-example="vecadd">vector add</button>
+            <button type="button" data-example="reduce">reduction</button>
+            <button type="button" data-example="cublas">cuBLAS + graphs</button>
+            <button type="button" data-example="wmma">tensor cores</button>
+          </span>
+        </div>
+        <textarea id="src" class="mono" spellcheck="false" aria-label="CUDA source code" placeholder="Paste CUDA code here…">{examples.vecadd}</textarea>
+      </div>
+
+      <div class="results" aria-live="polite">
+        <div class="verdict card">
+          <p class="big" id="verdict">…</p>
+          <div class="bar" id="bar" aria-hidden="true"></div>
+          <ul class="legend mono" id="legend"></ul>
+        </div>
+        <div class="card steps">
+          <h3>To port it</h3>
+          <ol>
+            <li>Replace <code>#include &lt;cuda_runtime.h&gt;</code> with <code>#include &lt;grx/grx_cuda_compat.h&gt;</code>.</li>
+            <li>Compile with <code>grxcc</code> instead of <code>nvcc</code>.</li>
+            <li id="step3">Work through the items flagged below.</li>
+          </ol>
+        </div>
+        <div id="list"></div>
+      </div>
+    </div>
+    <div class="wrap">
+      <p class="src mono">
+        Data from <a href={`https://github.com/${map.source.repo}/tree/${map.source.commit}`}>{map.source.repo}@{map.source.commit}</a> ({map.source.date}):         <a href={map.header}>grx_cuda_compat.h</a>, the device headers and <a href={map.docs}>cuda_mapping.md</a>.
+        GRXCP is in active development, so this changes as it does. <a href={site.hw.sdk}>GRXCP on GitHub ↗</a>
+      </p>
+    </div>
+  </section>
+</Base>
+
+<script is:inline define:vars={{ map, examples }}>
+  const STATUS = {
+    out:     { label: 'Out of scope for v1', cls: 's-out', rank: 0, flag: true },
+    config:  { label: 'Build-dependent', cls: 's-config', rank: 1, flag: true },
+    unknown: { label: 'Not in GRXCP yet', cls: 's-unknown', rank: 2, flag: true },
+    notyet:  { label: 'Not in GRXCP yet', cls: 's-unknown', rank: 2, flag: true },
+    planned: { label: 'Planned', cls: 's-planned', rank: 3, flag: true },
+    partial: { label: 'Partial equivalent', cls: 's-differs', rank: 4, flag: true },
+    differs: { label: 'Works, with a difference', cls: 's-differs', rank: 5, flag: true },
+    library: { label: 'Library equivalent', cls: 's-library', rank: 6, flag: true },
+    direct:  { label: 'Maps directly', cls: 's-ok', rank: 7 },
+    same:    { label: 'Same in GRXCP', cls: 's-ok', rank: 8 },
+  };
+  const E = map.entries;
+  // Names that start with "__" but are plain C/C++, not CUDA.
+  const IGNORE = new Set(['__attribute__', '__FILE__', '__LINE__', '__func__', '__FUNCTION__', '__cplusplus',
+    '__VA_ARGS__', '__COUNTER__', '__DATE__', '__TIME__', '__inline__', '__forceinline__', '__noinline__',
+    '__CUDA_ARCH__', '__CUDACC__', '__NVCC__']);
+  const PREFIX = [
+    [/^cudaGraph|^cudaStreamBeginCapture|^cudaStreamEndCapture|^cudaStreamCapture/, 'cudaGraph'],
+    [/^cudaIpc/, 'cudaIpc'], [/^cudnn/, 'cudnn'], [/^cufft/, 'cufft'], [/^curand/, 'curand'], [/^cusparse/, 'cusparse'],
+    [/^thrust::/, 'thrust'], [/^cub::/, 'cub'], [/^(nvcuda::)?wmma::/, 'wmma'], [/this_grid/, 'this_grid'],
+    [/^(cooperative_groups|cg)::grid_group/, 'grid_group'], [/^(cooperative_groups|cg)::/, 'cooperative_groups'],
+    [/^atomic[A-Z][a-z]+_(block|system)$/, (t) => t.replace(/_(block|system)$/, '')],
+  ];
+  const SCOPED = /\b(?:nvcuda::)?wmma::\w+|\b(?:cooperative_groups|cg|thrust|cub)::\w+/g;
+  const WORD = /\b(?:cuda\w+|cublas\w+|cudnn\w+|cufft\w+|curand\w+|cusparse\w+|cu[A-Z]\w*|CUBLAS_\w+|atomic[A-Z]\w*|__\w+|threadIdx|blockIdx|blockDim|gridDim|warpSize|clock64|clock|tex[123]D\w*|this_grid|nvcuda)\b/g;
+
+  // One row per family, so a tensor-core kernel isn't eleven wmma:: rows.
+  const FAMILY = {
+    wmma: 'wmma:: (tensor cores)', cudaGraph: 'CUDA graphs', cudaIpc: 'CUDA IPC', cudnn: 'cuDNN', cufft: 'cuFFT',
+    curand: 'cuRAND', cusparse: 'cuSPARSE', thrust: 'Thrust', cub: 'CUB', cooperative_groups: 'cooperative_groups',
+  };
+  function strip(src) {
+    return src.replace(/^\s*#\s*include\b.*$/gm, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*$/gm, ' ')
+      .replace(/"(?:\\.|[^"\\\n])*"/g, '""').replace(/'(?:\\.|[^'\\\n])'/g, "''");
+  }
+  function classify(tok) {
+    if (E[tok]) return { key: tok, ...E[tok] };
+    for (const [re, key] of PREFIX) {
+      if (!re.test(tok)) continue;
+      const k = typeof key === 'function' ? key(tok) : key;
+      if (E[k]) return { key: k, ...E[k] };
+    }
+    if (/^CUBLAS_/.test(tok)) return { key: tok, status: 'unknown', group: 'libraries', note: 'No grxBLAS constant with this name yet.' };
+    if (/^nvcuda$/.test(tok)) return null;
+    return { key: tok, status: 'unknown', note: 'Not in GRXCP’s compatibility header or mapping yet.' };
+  }
+  function analyze(src) {
+    const s = strip(src);
+    const found = new Map();
+    const add = (tok) => {
+      if (IGNORE.has(tok) || /^__builtin/.test(tok)) return;
+      const c = classify(tok); if (!c) return;
+      const fam = FAMILY[c.key] && c.key !== tok ? c.key : null;
+      const k = fam || tok;
+      const prev = found.get(k) || { ...c, name: fam ? FAMILY[fam] : tok, uses: 0, members: new Set() };
+      prev.uses++; if (fam) prev.members.add(tok.replace(/^(nvcuda::)?wmma::|^(cooperative_groups|cg)::/, ''));
+      found.set(k, prev);
+    };
+    for (const m of s.matchAll(SCOPED)) add(m[0]);
+    const sScoped = s.replace(SCOPED, ' ');
+    for (const m of sScoped.matchAll(WORD)) add(m[0]);
+    if (/<<</.test(s)) found.set('<<<>>>', { ...E['<<<>>>'], key: '<<<>>>', name: 'kernel<<<…>>>', uses: (s.match(/<<</g) || []).length });
+    return [...found.values()];
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (t) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function render() {
+    const items = analyze($('src').value).sort((a, b) =>
+      STATUS[a.status].rank - STATUS[b.status].rank || a.name.localeCompare(b.name));
+    const total = items.length;
+    const ok = items.filter((i) => !STATUS[i.status].flag).length;
+    const blocking = items.filter((i) => ['out', 'config', 'unknown', 'notyet', 'planned'].includes(i.status)).length;
+    $('verdict').textContent = total === 0
+      ? 'No CUDA names found yet. Paste some code, or pick an example.'
+      : `${ok} of ${total} CUDA names port with just the header swap.` +
+        (blocking ? ` ${blocking} need${blocking === 1 ? 's' : ''} a workaround or ${blocking === 1 ? "isn't" : "aren't"} available yet.` : '');
+    $('step3').textContent = total - ok === 0 && total > 0 ? 'Nothing else flagged.' : 'Work through the items flagged below.';
+    // proportion bar + legend
+    const groups = {};
+    for (const i of items) { const l = STATUS[i.status]; groups[l.label] = groups[l.label] || { n: 0, cls: l.cls, rank: l.rank }; groups[l.label].n++; }
+    const g = Object.entries(groups).sort((a, b) => b[1].rank - a[1].rank);
+    $('bar').innerHTML = g.map(([, v]) => `<span class="${v.cls}" style="flex:${v.n}"></span>`).join('');
+    $('legend').innerHTML = g.map(([k, v]) => `<li><i class="${v.cls}"></i>${esc(k)} <b>${v.n}</b></li>`).join('');
+    // list
+    $('list').innerHTML = items.map((i) => {
+      const st = STATUS[i.status];
+      const ref = i.ref ? ` <a class="ref" href="${map.docs}" title="cuda_mapping.md §${i.ref}">§${i.ref}</a>` : '';
+      return `<div class="row ${st.flag ? 'flag' : ''}">
+        <div class="nm mono">${esc(i.name)}${i.uses > 1 && !(i.members && i.members.size) ? ` <span class="uses">×${i.uses}</span>` : ''}</div>
+        ${i.members && i.members.size ? `<div class="mem mono">${esc([...i.members].join(', '))}</div>` : ''}
+        <div class="grx mono">${i.grx ? '→ ' + esc(i.grx) : ''}</div>
+        <span class="st ${st.cls}">${esc(st.label)}</span>
+        ${i.note ? `<p class="note">${esc(i.note)}${ref}</p>` : ''}
+      </div>`;
+    }).join('');
+  }
+  let t;
+  $('src').addEventListener('input', () => { clearTimeout(t); t = setTimeout(render, 150); });
+  document.querySelectorAll('[data-example]').forEach((b) => b.addEventListener('click', () => {
+    $('src').value = examples[b.dataset.example]; render();
+  }));
+  render();
+</script>
+
+<style>
+  .checker { display: grid; gap: 20px; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 1000px) { .checker { grid-template-columns: 1.1fr 1fr; } }
+  .checker > * { min-width: 0; }
+  .editor { border: 1px solid var(--gw-line-strong); border-radius: 10px; overflow: hidden; background: #05060a; }
+  @media (min-width: 1000px) { .editor { position: sticky; top: 84px; } }
+  .ed-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--gw-line); }
+  .lbl { font-size: .75rem; color: var(--gw-steel); }
+  .ex { font-size: .7rem; color: var(--gw-steel); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .ex button { font: inherit; color: var(--gw-teal); background: transparent; border: 1px solid var(--gw-line-strong); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+  .ex button:hover { border-color: var(--gw-teal); }
+  textarea {
+    display: block; width: 100%; min-height: 460px; resize: vertical; border: 0; outline: none;
+    background: transparent; color: var(--gw-white); font-size: .8rem; line-height: 1.65; padding: 16px; tab-size: 2;
+  }
+  .results { display: grid; gap: 14px; }
+  .verdict .big { color: var(--gw-white); font-size: 1.15rem; margin: 0 0 14px; }
+  .bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--gw-line); gap: 2px; }
+  .legend { list-style: none; padding: 0; margin: 12px 0 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .72rem; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .legend b { color: var(--gw-white); font-weight: 500; margin-left: 4px; }
+  .steps h3 { font-size: 1rem; margin-bottom: 8px; }
+  .steps ol { margin: 0; padding-left: 20px; font-size: .9rem; display: grid; gap: 4px; }
+  code { font-family: var(--gw-font-mono); font-size: .85em; color: var(--gw-white); }
+  #list { border: 1px solid var(--gw-line); border-radius: 10px; overflow: hidden; }
+  #list:empty { display: none; }
+  :global(.row) { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 12px 16px; border-bottom: 1px solid var(--gw-line); align-items: center; }
+  :global(.row:last-child) { border-bottom: 0; }
+  :global(.row .nm) { color: var(--gw-white); font-size: .82rem; word-break: break-all; }
+  :global(.row .uses) { color: var(--gw-steel); font-size: .72rem; }
+  :global(.row .mem) { grid-column: 1; font-size: .7rem; color: var(--gw-steel); word-break: break-word; }
+  :global(.row .grx) { grid-column: 1; font-size: .74rem; color: var(--gw-teal); word-break: break-all; }
+  :global(.row .grx:empty) { display: none; }
+  :global(.row .st) { grid-column: 2; grid-row: 1; justify-self: end; }
+  :global(.row .note) { grid-column: 1 / -1; margin: 2px 0 0; font-size: .82rem; }
+  :global(.row .ref) { font-family: var(--gw-font-mono); font-size: .75rem; }
+  :global(.st) { display: inline-block; font: 500 .62rem/1 var(--gw-font-mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; border: 1px solid; white-space: nowrap; }
+  :global(.s-ok) { color: var(--gw-green); border-color: #39ff1455; background-color: transparent; }
+  :global(.s-library) { color: var(--gw-teal); border-color: #00f5d455; }
+  :global(.s-differs) { color: #ffb020; border-color: #ffb02066; }
+  :global(.s-config) { color: #ff8a3d; border-color: #ff8a3d66; }
+  :global(.s-planned) { color: #b9a3ff; border-color: #b9a3ff66; }
+  :global(.s-unknown) { color: var(--gw-steel); border-color: var(--gw-line-strong); }
+  :global(.s-out) { color: #ff5c7a; border-color: #ff5c7a66; }
+  :global(.bar .s-ok), :global(.legend .s-ok) { background: var(--gw-green); }
+  :global(.bar .s-library), :global(.legend .s-library) { background: var(--gw-teal); }
+  :global(.bar .s-differs), :global(.legend .s-differs) { background: #ffb020; }
+  :global(.bar .s-config), :global(.legend .s-config) { background: #ff8a3d; }
+  :global(.bar .s-planned), :global(.legend .s-planned) { background: #b9a3ff; }
+  :global(.bar .s-unknown), :global(.legend .s-unknown) { background: #5c6678; }
+  :global(.bar .s-out), :global(.legend .s-out) { background: #ff5c7a; }
+  .src { font-size: .74rem; margin-top: 20px; }
+</style>

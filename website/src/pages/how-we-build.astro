@@ -1,0 +1,89 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import Via from '../components/Via.astro';
+import { site } from '../site';
+
+const steps = [
+  { n: '01', who: 'Dave', title: 'Spec', body: 'Every block starts as a written spec in the repo: architecture, interfaces, registers and constraints. The spec is the source of truth.' },
+  { n: '02', who: 'Via', title: 'Build', body: 'AI agents built with Freebuff turn the spec into synthesizable SystemVerilog, testbenches and documentation.' },
+  { n: '03', who: 'Open tools', title: 'Verify', body: 'Icarus Verilog testbenches, equivalence gates and SymbiYosys formal checks run against the change. Results are recorded with it, pass or fail.' },
+  { n: '04', who: 'Dave', title: 'Sign off', body: 'Nothing merges without a human review. Dave reads the diff and the verification results, then signs off.' },
+];
+const tools = ['Freebuff', 'Icarus Verilog', 'Verilator', 'SymbiYosys', 'Vivado', 'LibreLane', 'GitHub'];
+---
+<Base title="How we build" description="How Gridworkz designs chips: human-architected, AI-built with Freebuff, and verified in public with open-source tools.">
+  <PageHead eyebrow="How we build" title="Human-architected. AI-built. Openly verified.">
+    Gridworkz is one engineer and a fleet of AI agents. Here is how a chip block goes from idea to verified RTL,
+    and why you don't have to take AI-written hardware on trust.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <ol class="steps">
+        {steps.map((s) => (
+          <li class="card step">
+            <span class="num mono">{s.n}</span>
+            <span class="tag">{s.who}</span>
+            <h3>{s.title}</h3>
+            <p>{s.body}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section-line">
+    <div class="wrap trust">
+      <div>
+        <span class="eyebrow">Why trust AI-written RTL?</span>
+        <h2>You don't have to. Check it.</h2>
+        <p>The chips aren't trustworthy because an AI wrote them, or because a person did. They're trustworthy because anyone can check them:</p>
+        <ul class="feat">
+          <li><b>Open source.</b> Every line of RTL, every testbench and every script is on GitHub.</li>
+          <li><b>Open verification.</b> Results come from open-source tools you can run yourself, on a laptop.</li>
+          <li><b>Human sign-off.</b> A person reviews and approves every change before it merges.</li>
+          <li><b>Public errata.</b> When something is wrong, it's documented, not hidden.</li>
+        </ul>
+      </div>
+      <figure class="card quote">
+        <Via size={88} />
+        <blockquote>&ldquo;Dave decides what to build. I build it. The tests decide whether I got it right.&rdquo;</blockquote>
+        <figcaption class="mono">Via, the Gridworkz AI agents</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section-line">
+    <div class="wrap">
+      <span class="eyebrow">Toolchain</span>
+      <h2>Built with</h2>
+      <ul class="chips mono">{tools.map((t) => <li>{t}</li>)}</ul>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="/build-log">Read the build log</a>
+        <a class="btn btn-ghost" href="/company">Meet the team</a>
+      </div>
+    </div>
+  </section>
+</Base>
+<style>
+  .steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; grid-template-columns: 1fr; counter-reset: none; }
+  @media (min-width: 720px) { .steps { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1080px) { .steps { grid-template-columns: repeat(4, 1fr); } }
+  .step { position: relative; border-top: 2px solid var(--gw-teal); }
+  .num { position: absolute; top: 20px; right: 24px; font-size: 1.6rem; color: var(--gw-line-strong); font-weight: 600; }
+  .step h3 { margin-top: 10px; }
+  .step p { margin: 0; }
+  .note { font-size: .78rem; margin-top: 20px; }
+  .trust { display: grid; gap: 48px; grid-template-columns: 1fr; align-items: center; }
+  @media (min-width: 900px) { .trust { grid-template-columns: 1.3fr 1fr; } }
+  .feat { padding: 0; list-style: none; display: grid; gap: 12px; margin-top: 20px; }
+  .feat li { padding-left: 18px; position: relative; }
+  .feat li::before { content: '▸'; color: var(--gw-teal); position: absolute; left: 0; }
+  .feat b { color: var(--gw-white); font-weight: 600; }
+  .quote { margin: 0; display: grid; gap: 18px; justify-items: start; }
+  blockquote { margin: 0; font-size: 1.25rem; line-height: 1.45; color: var(--gw-white); }
+  figcaption { font-size: .75rem; color: var(--gw-teal); }
+  .chips { list-style: none; padding: 0; margin: 20px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips li { font-size: .8rem; padding: 6px 12px; border: 1px solid var(--gw-line-strong); border-radius: 99px; color: var(--gw-white); }
+</style>

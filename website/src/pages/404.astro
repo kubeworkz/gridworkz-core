@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+import Via from '../components/Via.astro';
+---
+<Base title="Page not found">
+  <section class="nf">
+    <div class="wrap">
+      <Via size={120} />
+      <span class="eyebrow">[ ERROR 404 · UNROUTED NET ]</span>
+      <h1>Via couldn't route this signal.</h1>
+      <p class="lede">The page you're looking for doesn't exist, or it moved.</p>
+      <div class="btn-row">
+        <a class="btn btn-primary" href="/">Back to home</a>
+        <a class="btn btn-ghost" href="/docs">Search the docs</a>
+      </div>
+    </div>
+  </section>
+</Base>
+<style>
+  .nf { padding: 120px 0; text-align: center; }
+  .nf :global(.via) { margin: 0 auto 32px; }
+  .nf .lede { margin: 0 auto; }
+  .nf .btn-row { justify-content: center; }
+  h1 { font-size: clamp(2rem, 4.5vw, 3rem); }
+</style>

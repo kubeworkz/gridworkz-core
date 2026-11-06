@@ -1,0 +1,114 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import Via from '../components/Via.astro';
+import { site } from '../site';
+
+const split = [
+  { who: 'Dave', does: 'Sets the architecture, writes the specs, makes the trade-offs, reviews every change and signs off on what ships.' },
+  { who: 'Via', does: 'Writes and refactors RTL, generates testbenches, runs verification and keeps the docs in step with the code.' },
+  { who: 'Open tools', does: 'Do the checking: Icarus Verilog, Verilator and SymbiYosys formal tools. Results are public, so nobody has to take the AI on trust.' },
+];
+const contribute = [
+  { area: 'RTL design', detail: 'RISC-V SoC and NPUs (grx930), G100 GPU (grxgpu)', href: site.githubOrg },
+  { area: 'Verification', detail: 'GRX930 testbenches and equivalence gates', href: `${site.hw.soc}/tree/main/c930/tb` },
+  { area: 'GPU software', detail: 'G100 kernel, runtime and drivers', href: `${site.hw.gpu}/tree/main/sw` },
+  { area: 'Documentation', detail: 'Register maps, tutorials, API reference', href: `${site.repo}/tree/main/docs` },
+];
+---
+<Base title="Company" description="Gridworkz is a fabless chip company with a team of one: founder Dave Cook and Via, the AI agents that build the chips.">
+  <PageHead eyebrow="Company" title="One engineer. A fleet of AI agents. Open silicon.">
+    Gridworkz is a fabless chip company with a team of one. Dave sets the architecture, and AI agents do
+    the heavy lifting: writing RTL, generating testbenches, running verification and keeping the docs current.
+    Every design is checked with open-source tools, and every result is public.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <span class="eyebrow">The team</span>
+      <div class="team">
+        <article class="card person">
+          <div class="avatar mono" aria-hidden="true">DC</div>
+          <h3>Dave Cook</h3>
+          <span class="tag">Founder & Chip Architect</span>
+          <p>
+            After a career as a CTO in the financial industry, Dave started Gridworkz to test an idea:
+            that one person directing AI agents can design competitive silicon. He writes the specs,
+            makes the architectural calls and signs off on everything that ships.
+          </p>
+          <p><a href={`mailto:${site.contactEmail}`}>{site.contactEmail}</a></p>
+        </article>
+        <article class="card person via-card">
+          <Via size={72} class="via-avatar" />
+          <h3>Via</h3>
+          <span class="tag">The AI agents</span>
+          <p>
+            Via is what we call the AI agents, built with Freebuff, that turn Dave's specs into RTL,
+            tests and documentation. In chip design, a via is the tiny connection between layers of a chip.
+            Our Via connects the architecture to the silicon.
+          </p>
+          <p><a href="/how-we-build">How we build →</a></p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-line">
+    <div class="wrap">
+      <span class="eyebrow">Who does what</span>
+      <h2>Human-architected. AI-built. Openly verified.</h2>
+      <div class="split">
+        {split.map((s) => (
+          <div class="row">
+            <span class="mono who">{s.who}</span>
+            <p>{s.does}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section-line" id="contribute">
+    <div class="wrap">
+      <span class="eyebrow">Ways to contribute</span>
+      <h2>The team is one person. The community doesn't have to be.</h2>
+      <p class="lede">Gridworkz is open source. Pick an area, read the <a href={`${site.repo}/blob/main/CONTRIBUTING.md`}>contributing guide</a>, and open a pull request.</p>
+      <ul class="roles">
+        {contribute.map((c) => (
+          <li>
+            <a href={c.href}>
+              <span class="rt">{c.area}</span>
+              <span class="mono meta">{c.detail}</span>
+              <span class="arrow">→</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</Base>
+<style>
+  .team { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .team { grid-template-columns: 1fr 1fr; } }
+  .avatar {
+    width: 72px; height: 72px; border-radius: 8px; margin-bottom: 18px;
+    display: grid; place-items: center; color: var(--gw-teal); font-size: 1.3rem; font-weight: 600;
+    background: repeating-linear-gradient(90deg, var(--gw-line-strong) 0 1px, transparent 1px 8px),
+                repeating-linear-gradient(0deg, var(--gw-line-strong) 0 1px, var(--gw-surface) 1px 8px);
+    border: 1px solid var(--gw-teal);
+  }
+  .person p { margin-top: 12px; }
+  .via-card :global(.via-avatar) { margin-bottom: 18px; }
+  .split { margin-top: 32px; border-top: 1px solid var(--gw-line); }
+  .row { display: grid; grid-template-columns: 1fr; gap: 6px 32px; padding: 20px 0; border-bottom: 1px solid var(--gw-line); }
+  @media (min-width: 720px) { .row { grid-template-columns: 160px 1fr; } }
+  .row p { margin: 0; }
+  .who { color: var(--gw-teal); font-size: .9rem; }
+  .roles { list-style: none; padding: 0; margin: 24px 0 0; border-top: 1px solid var(--gw-line); }
+  .roles a { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center; padding: 20px 4px; border-bottom: 1px solid var(--gw-line); }
+  .roles a:hover { text-decoration: none; background: #0f1d1d; }
+  .rt { color: var(--gw-white); font-weight: 500; }
+  .meta { font-size: .78rem; color: var(--gw-steel); }
+  .arrow { color: var(--gw-teal); }
+  @media (max-width: 640px) { .roles a { grid-template-columns: 1fr auto; } .meta { grid-column: 1; } .arrow { grid-row: 1 / span 2; grid-column: 2; } }
+</style>

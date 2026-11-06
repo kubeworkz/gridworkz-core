@@ -1,0 +1,45 @@
+---
+import Logo from './Logo.astro';
+import { site } from '../site';
+const year = new Date().getFullYear();
+---
+<footer>
+  <div class="wrap grid">
+    <div>
+      <Logo />
+      <p class="small">Open silicon, built by one engineer and a fleet of AI agents. Apache 2.0.</p>
+    </div>
+    <div>
+      <h4>Platform</h4>
+      <a href="/technology">Architecture</a>
+      <a href="/technology#sdk">GRXCP</a>
+      <a href="/docs">Documentation</a>
+      <a href="/playground">Playground</a>
+    </div>
+    <div>
+      <h4>Community</h4>
+      <a href={site.githubOrg}>GitHub</a>
+      <a href={`${site.repo}/blob/main/CONTRIBUTING.md`}>Contributing</a>
+      <a href="/manifesto">Manifesto</a>
+    </div>
+    <div>
+      <h4>Company</h4>
+      <a href="/company">Team</a>
+      <a href="/how-we-build">How we build</a>
+      <a href="/build-log">Build log</a>
+      <a href="/company#contribute">Contribute</a>
+      <a href="/labs">Lab allocations</a>
+    </div>
+  </div>
+  <div class="wrap legal mono">© {year} Gridworkz · {site.domain}</div>
+</footer>
+<style>
+  footer { border-top: 1px solid var(--gw-line); padding: 56px 0 32px; margin-top: 40px; }
+  .grid { display: grid; gap: 32px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+  .grid > div:first-child { min-width: 240px; }
+  h4 { font: 500 .75rem/1 var(--gw-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gw-white); margin-bottom: 16px; }
+  a:not(.logo) { display: block; color: var(--gw-steel); font-size: .92rem; margin-bottom: 8px; }
+  a:not(.logo):hover { color: var(--gw-teal); text-decoration: none; }
+  .small { font-size: .88rem; margin-top: 16px; max-width: 18rem; }
+  .legal { font-size: .78rem; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--gw-line); }
+</style>

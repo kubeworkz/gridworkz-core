@@ -1,0 +1,40 @@
+---
+// Static form. Netlify picks up `data-netlify`; on Vercel, point `action` at Formspree or similar.
+---
+<form class="form card" name="lab-allocation" method="POST" data-netlify="true" netlify-honeypot="company_url" action="/labs/thanks">
+  <input type="hidden" name="form-name" value="lab-allocation" />
+  <p hidden><label>Leave blank <input name="company_url" /></label></p>
+  <div class="two">
+    <label>Name<input name="name" required autocomplete="name" /></label>
+    <label>Institutional email<input name="email" type="email" required autocomplete="email" /></label>
+  </div>
+  <div class="two">
+    <label>Institution<input name="institution" required /></label>
+    <label>Role
+      <select name="role" required>
+        <option value="">Select…</option>
+        <option>Principal Investigator</option><option>Postdoc</option>
+        <option>PhD student</option><option>Research engineer</option><option>Other</option>
+      </select>
+    </label>
+  </div>
+  <label>Research focus
+    <textarea name="focus" rows="4" required placeholder="e.g. FP4 quantization on the NPUs, electro-optic GEMM accuracy, OS research on RV64"></textarea>
+  </label>
+  <label>Boards needed
+    <select name="boards"><option>1</option><option>2–4</option><option>5+ (teaching lab)</option></select>
+  </label>
+  <button class="btn btn-primary" type="submit">Request an evaluation board</button>
+</form>
+<style>
+  .form { display: grid; gap: 18px; }
+  .two { display: grid; gap: 18px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .two { grid-template-columns: 1fr 1fr; } }
+  label { display: grid; gap: 6px; font: 500 .75rem/1.2 var(--gw-font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--gw-steel); }
+  input, select, textarea {
+    font: 400 1rem/1.4 var(--gw-font-sans); color: var(--gw-white); text-transform: none; letter-spacing: 0;
+    background: var(--gw-bg); border: 1px solid var(--gw-line-strong); border-radius: var(--gw-radius); padding: 10px 12px;
+  }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--gw-teal); box-shadow: 0 0 0 3px var(--gw-teal-dim); }
+  button { justify-self: start; cursor: pointer; }
+</style>

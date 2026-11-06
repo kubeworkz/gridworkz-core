@@ -1,0 +1,91 @@
+---
+import { site } from '../site';
+const commands = [
+  { c: '# 1. Install the open-source simulator', comment: true },
+  { c: 'sudo apt install iverilog' },
+  { c: '# 2. Clone the GRX930 RISC-V SoC', comment: true },
+  { c: `git clone ${site.hw.soc}.git` },
+  { c: 'cd grx930/c930' },
+  { c: '# 3. Run the NPU GEMM regression (~1 min)', comment: true },
+  { c: 'make npu' },
+];
+const copyText = commands.filter((l) => !l.comment).map((l) => l.c).join('\n');
+// Other targets: make npu_float, make soc (full SoC + firmware), make quad.
+const output: string[] = [];
+---
+<div class="term" data-terminal>
+  <div class="bar">
+    <span class="dots"><i></i><i></i><i></i></span>
+    <span class="mono title">~/grx930 — bash</span>
+    <button class="copy mono" type="button" data-copy={copyText}>Copy</button>
+  </div>
+  <pre class="body"><code>{commands.map((l) => (
+    l.comment ? <span class="cm">{l.c}{'\n'}</span> : <span><span class="ps">$ </span>{l.c}{'\n'}</span>
+  ))}{output.length > 0 && <span class="out" data-out>{output.map((o) => <span class="ol">{o}{'\n'}</span>)}</span>}</code></pre>
+  <div class="wave" aria-label="Illustrative waveform">
+    <span class="wave-cap mono">Illustrative waveform</span>
+    <svg viewBox="0 0 600 120" preserveAspectRatio="none" role="img">
+      <title>Waveform: clock, valid and data bus signals</title>
+      <g class="labels mono" font-size="10" fill="#8f9cae">
+        <text x="6" y="22">clk</text><text x="6" y="62">valid</text><text x="6" y="102">data</text>
+      </g>
+      <path class="sig clk" d="M50 30 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16 h12 v-16 h12 v16"/>
+      <path class="sig valid" d="M50 70 h96 v-16 h288 v16 h166"/>
+      <path class="sig data" d="M50 102 h96 l6 -8 h66 l6 8 l-6 8 h-66 l-6 -8 M224 102 l6 -8 h66 l6 8 l-6 8 h-66 l-6 -8 M302 102 l6 -8 h120 l6 8 l-6 8 h-120 l-6 -8 M434 102 h166"/>
+    </svg>
+  </div>
+</div>
+<style>
+  .term {
+    background: #05060a; border: 1px solid var(--gw-line-strong); border-radius: 10px;
+    overflow: hidden; box-shadow: 0 30px 80px -30px #00f5d433;
+  }
+  .bar { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--gw-line); }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--gw-line-strong); display: block; }
+  .title { font-size: .75rem; flex: 1; }
+  .wave-cap { display: block; font-size: .62rem; color: #5c6678; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 2px; }
+  .copy {
+    font-size: .72rem; color: var(--gw-teal); background: transparent; border: 1px solid var(--gw-line-strong);
+    border-radius: 4px; padding: 4px 10px; cursor: pointer;
+  }
+  .copy:hover { border-color: var(--gw-teal); }
+  .body { margin: 0; padding: 18px; font-size: .8rem; line-height: 1.75; color: var(--gw-white); overflow-x: auto; }
+  .cm { color: #5c6678; }
+  .ps { color: var(--gw-teal); }
+  .out { display: block; margin-top: 8px; color: #ffb020; }
+  .ol { opacity: 0; transition: opacity .25s; }
+  .ol.on { opacity: .9; }
+  .wave { border-top: 1px solid var(--gw-line); padding: 8px 14px 12px; }
+  .wave svg { width: 100%; height: 90px; display: block; }
+  .sig { fill: none; stroke-width: 1.5; stroke-dasharray: 2400; stroke-dashoffset: 2400; }
+  .clk { stroke: #5c6678; }
+  .valid { stroke: var(--gw-teal); }
+  .data { stroke: var(--gw-green); }
+  .term.run .sig { animation: draw 2.4s ease-out forwards; }
+  .term.run .valid { animation-delay: .3s; }
+  .term.run .data { animation-delay: .6s; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  @media (prefers-reduced-motion: reduce) {
+    .sig { stroke-dashoffset: 0; } .ol { opacity: .9; }
+  }
+</style>
+<script>
+  document.querySelectorAll<HTMLElement>('[data-terminal]').forEach((term) => {
+    const btn = term.querySelector<HTMLButtonElement>('[data-copy]')!;
+    btn.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(btn.dataset.copy || ''); btn.textContent = 'Copied ✓'; }
+      catch { btn.textContent = 'Select & copy'; }
+      setTimeout(() => (btn.textContent = 'Copy'), 1800);
+    });
+    // Play the "output" + waveform once the terminal scrolls into view.
+    const lines = term.querySelectorAll('.ol');
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      lines.forEach((l, i) => setTimeout(() => l.classList.add('on'), 400 + i * 380));
+      setTimeout(() => term.classList.add('run'), 400 + lines.length * 380);
+    }, { threshold: 0.4 });
+    io.observe(term);
+  });
+</script>

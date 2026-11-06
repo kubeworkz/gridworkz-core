@@ -1,0 +1,14 @@
+blank_issues_enabled: true
+contact_links:
+  - name: GRX930 RISC-V SoC and NPU (hardware issues)
+    url: https://github.com/kubeworkz/grx930/issues
+    about: RTL, simulation and FPGA issues for the GRX930 belong in its repository.
+  - name: G100 GPU and photonic accelerator (hardware issues)
+    url: https://github.com/kubeworkz/grxgpu/issues
+    about: G100 RTL, simulators and PTA proposals.
+  - name: GRXCP software platform
+    url: https://github.com/kubeworkz/grxcp/issues
+    about: Runtime, grxcc compiler and libraries.
+  - name: Request an evaluation board for your lab
+    url: https://gridworkz.com/labs
+    about: Academic requests go through the website.

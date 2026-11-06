@@ -1,0 +1,19 @@
+# gridworkz.com is built from the website/ folder.
+[build]
+  base    = "website"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+# Old docs URLs
+[[redirects]]
+  from = "/docs/sdk/quickstart"
+  to = "/docs/quickstart"
+  status = 301
+
+[[redirects]]
+  from = "/docs/sdk/photonic-compute"
+  to = "/docs/hardware/pta"
+  status = 301

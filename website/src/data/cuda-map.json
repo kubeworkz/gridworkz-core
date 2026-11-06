@@ -1,0 +1,1047 @@
+{
+  "source": {
+    "repo": "kubeworkz/grxcp",
+    "commit": "100179e",
+    "date": "2026-10-29"
+  },
+  "docs": "https://github.com/kubeworkz/grxcp/blob/100179e/docs/designs/cuda_mapping.md",
+  "header": "https://github.com/kubeworkz/grxcp/blob/100179e/include/grx/grx_cuda_compat.h",
+  "entries": {
+    "__activemask": {
+      "status": "same",
+      "group": "device"
+    },
+    "__all_sync": {
+      "status": "same",
+      "group": "device"
+    },
+    "__any_sync": {
+      "status": "same",
+      "group": "device"
+    },
+    "__ballot_sync": {
+      "status": "same",
+      "group": "device"
+    },
+    "__brev": {
+      "status": "same",
+      "group": "device"
+    },
+    "__clz": {
+      "status": "same",
+      "group": "device"
+    },
+    "__constant__": {
+      "status": "differs",
+      "group": "language",
+      "note": "Works, but lowers to read-only global memory: there is no broadcast constant cache.",
+      "ref": "7.2"
+    },
+    "__device__": {
+      "status": "same",
+      "group": "language"
+    },
+    "__ffs": {
+      "status": "same",
+      "group": "device"
+    },
+    "__global__": {
+      "status": "same",
+      "group": "language"
+    },
+    "__host__": {
+      "status": "same",
+      "group": "language"
+    },
+    "__launch_bounds__": {
+      "status": "same",
+      "group": "language"
+    },
+    "__ldg": {
+      "status": "same",
+      "group": "language"
+    },
+    "__match_all_sync": {
+      "status": "out",
+      "group": "device",
+      "note": "No match instruction; out of scope for v1."
+    },
+    "__match_any_sync": {
+      "status": "out",
+      "group": "device",
+      "note": "No match instruction; out of scope for v1."
+    },
+    "__popc": {
+      "status": "same",
+      "group": "device"
+    },
+    "__restrict__": {
+      "status": "same",
+      "group": "language"
+    },
+    "__shared__": {
+      "status": "same",
+      "group": "language",
+      "note": "Static and dynamic (extern) shared memory both work; grxcc carves the per-block slot.",
+      "ref": "7.10"
+    },
+    "__shfl_down_sync": {
+      "status": "same",
+      "group": "device"
+    },
+    "__shfl_sync": {
+      "status": "same",
+      "group": "device"
+    },
+    "__shfl_up_sync": {
+      "status": "same",
+      "group": "device"
+    },
+    "__shfl_xor_sync": {
+      "status": "same",
+      "group": "device"
+    },
+    "__syncthreads": {
+      "status": "same",
+      "group": "device",
+      "note": "Keep it out of divergent branches: the toolchain can duplicate it into a deadlock.",
+      "ref": "7.20"
+    },
+    "__syncwarp": {
+      "status": "same",
+      "group": "device"
+    },
+    "__threadfence": {
+      "status": "same",
+      "group": "device"
+    },
+    "__threadfence_block": {
+      "status": "same",
+      "group": "device"
+    },
+    "__threadfence_system": {
+      "status": "same",
+      "group": "device"
+    },
+    "<<<>>>": {
+      "status": "same",
+      "group": "language",
+      "note": "Same launch syntax: grid, block, shared bytes, stream."
+    },
+    "assert": {
+      "status": "same",
+      "group": "device"
+    },
+    "atomicAdd": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicAnd": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicCAS": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicDec": {
+      "status": "notyet",
+      "group": "device"
+    },
+    "atomicExch": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicInc": {
+      "status": "notyet",
+      "group": "device"
+    },
+    "atomicMax": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicMin": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicOr": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicSub": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "atomicXor": {
+      "status": "config",
+      "group": "device",
+      "note": "Compiles to a clear error on the current G100 build (no RISC-V atomic extension); works on builds with it enabled. Float forms use a compare-and-swap loop.",
+      "ref": "7.16"
+    },
+    "binary_partition": {
+      "status": "out",
+      "group": "device",
+      "note": "Out of scope for v1."
+    },
+    "blockDim": {
+      "status": "same",
+      "group": "device"
+    },
+    "blockIdx": {
+      "status": "same",
+      "group": "device"
+    },
+    "clock": {
+      "status": "differs",
+      "group": "device",
+      "note": "Use grx::clock64().",
+      "ref": null,
+      "grx": "grx::clock64"
+    },
+    "clock64": {
+      "status": "differs",
+      "group": "device",
+      "note": "Use grx::clock64().",
+      "ref": null,
+      "grx": "grx::clock64"
+    },
+    "cooperative_groups": {
+      "status": "same",
+      "group": "device",
+      "note": "The namespace forwards to grx::cg; tiles must be no wider than a warp."
+    },
+    "cub": {
+      "status": "planned",
+      "group": "libraries",
+      "note": "grx::par (header-only) is planned; not in GRXCP yet.",
+      "ref": null,
+      "grx": "grx::par"
+    },
+    "CUBLAS_OP_N": {
+      "status": "library",
+      "grx": "GRXBLAS_OP_N",
+      "group": "libraries"
+    },
+    "CUBLAS_OP_T": {
+      "status": "library",
+      "grx": "GRXBLAS_OP_T",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_ALLOC_FAILED": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_ALLOC_FAILED",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_ARCH_MISMATCH": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_ARCH_MISMATCH",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_EXECUTION_FAILED": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_EXECUTION_FAILED",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_INTERNAL_ERROR": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_INTERNAL_ERROR",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_INVALID_VALUE": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_INVALID_VALUE",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_NOT_INITIALIZED": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_NOT_INITIALIZED",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_NOT_SUPPORTED": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_NOT_SUPPORTED",
+      "group": "libraries"
+    },
+    "CUBLAS_STATUS_SUCCESS": {
+      "status": "library",
+      "grx": "GRXBLAS_STATUS_SUCCESS",
+      "group": "libraries"
+    },
+    "cublasCreate": {
+      "status": "library",
+      "grx": "grxblasCreate",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasCreate_v2": {
+      "status": "library",
+      "grx": "grxblasCreate",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasDestroy": {
+      "status": "library",
+      "grx": "grxblasDestroy",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasDestroy_v2": {
+      "status": "library",
+      "grx": "grxblasDestroy",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasGemmEx": {
+      "status": "library",
+      "grx": "grxblasGemmEx",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasGemmEx_v2": {
+      "status": "library",
+      "grx": "grxblasGemmEx",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasGetStatusString": {
+      "status": "library",
+      "grx": "grxblasGetStatusString",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasGetStatusString_v2": {
+      "status": "library",
+      "grx": "grxblasGetStatusString",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasGetStream": {
+      "status": "library",
+      "grx": "grxblasGetStream",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasGetStream_v2": {
+      "status": "library",
+      "grx": "grxblasGetStream",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasHandle_t": {
+      "status": "library",
+      "grx": "grxblasHandle_t",
+      "group": "libraries"
+    },
+    "cublasOperation_t": {
+      "status": "library",
+      "grx": "grxblasOperation_t",
+      "group": "libraries"
+    },
+    "cublasSaxpy": {
+      "status": "library",
+      "grx": "grxblasSaxpy",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSaxpy_v2": {
+      "status": "library",
+      "grx": "grxblasSaxpy",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSetStream": {
+      "status": "library",
+      "grx": "grxblasSetStream",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSetStream_v2": {
+      "status": "library",
+      "grx": "grxblasSetStream",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSgemm": {
+      "status": "library",
+      "grx": "grxblasSgemm",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSgemm_v2": {
+      "status": "library",
+      "grx": "grxblasSgemm",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSgemmStridedBatched": {
+      "status": "library",
+      "grx": "grxblasSgemmStridedBatched",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSgemmStridedBatched_v2": {
+      "status": "library",
+      "grx": "grxblasSgemmStridedBatched",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSgemv": {
+      "status": "library",
+      "grx": "grxblasSgemv",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSgemv_v2": {
+      "status": "library",
+      "grx": "grxblasSgemv",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSscal": {
+      "status": "library",
+      "grx": "grxblasSscal",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasSscal_v2": {
+      "status": "library",
+      "grx": "grxblasSscal",
+      "group": "libraries",
+      "note": "grxBLAS equivalent. Rename by hand and check the signature."
+    },
+    "cublasStatus_t": {
+      "status": "library",
+      "grx": "grxblasStatus_t",
+      "group": "libraries"
+    },
+    "cudaAddressModeBorder": {
+      "status": "direct",
+      "grx": "GRX_TEX_ADDRESS_BORDER",
+      "group": "textures"
+    },
+    "cudaAddressModeClamp": {
+      "status": "direct",
+      "grx": "GRX_TEX_ADDRESS_CLAMP",
+      "group": "textures"
+    },
+    "cudaAddressModeMirror": {
+      "status": "direct",
+      "grx": "GRX_TEX_ADDRESS_MIRROR",
+      "group": "textures"
+    },
+    "cudaAddressModeWrap": {
+      "status": "direct",
+      "grx": "GRX_TEX_ADDRESS_WRAP",
+      "group": "textures"
+    },
+    "cudaArray_t": {
+      "status": "direct",
+      "grx": "grxArray_t",
+      "group": "textures"
+    },
+    "cudaCreateTextureObject": {
+      "status": "differs",
+      "grx": "grxCreateTextureObject",
+      "group": "textures",
+      "note": "Textures are sampled in software from global memory.",
+      "ref": "7.8"
+    },
+    "cudaDestroyTextureObject": {
+      "status": "direct",
+      "grx": "grxDestroyTextureObject",
+      "group": "textures"
+    },
+    "cudaDeviceCanAccessPeer": {
+      "status": "direct",
+      "grx": "grxDeviceCanAccessPeer",
+      "group": "device"
+    },
+    "cudaDeviceEnablePeerAccess": {
+      "status": "differs",
+      "grx": "grxDeviceEnablePeerAccess",
+      "group": "device",
+      "note": "Renamed, but returns NotSupported: no peer access in v1."
+    },
+    "cudaDeviceGetAttribute": {
+      "status": "direct",
+      "grx": "grxDeviceGetAttribute",
+      "group": "device"
+    },
+    "cudaDeviceProp": {
+      "status": "direct",
+      "grx": "grxDeviceProp_t",
+      "group": "device"
+    },
+    "cudaDeviceReset": {
+      "status": "direct",
+      "grx": "grxDeviceReset",
+      "group": "device"
+    },
+    "cudaDeviceSynchronize": {
+      "status": "direct",
+      "grx": "grxDeviceSynchronize",
+      "group": "device"
+    },
+    "cudaError_t": {
+      "status": "direct",
+      "grx": "grxError_t",
+      "group": "errors"
+    },
+    "cudaErrorFileNotFound": {
+      "status": "direct",
+      "grx": "grxErrorFileNotFound",
+      "group": "errors"
+    },
+    "cudaErrorInvalidDevice": {
+      "status": "direct",
+      "grx": "grxErrorInvalidDevice",
+      "group": "errors"
+    },
+    "cudaErrorInvalidSymbol": {
+      "status": "direct",
+      "grx": "grxErrorInvalidSymbol",
+      "group": "memory"
+    },
+    "cudaErrorInvalidValue": {
+      "status": "direct",
+      "grx": "grxErrorInvalidValue",
+      "group": "errors"
+    },
+    "cudaErrorLaunchFailure": {
+      "status": "direct",
+      "grx": "grxErrorLaunchFailure",
+      "group": "errors"
+    },
+    "cudaErrorLaunchOutOfResources": {
+      "status": "direct",
+      "grx": "grxErrorLaunchOutOfResources",
+      "group": "errors"
+    },
+    "cudaErrorMemoryAllocation": {
+      "status": "direct",
+      "grx": "grxErrorMemoryAllocation",
+      "group": "errors"
+    },
+    "cudaErrorNotReady": {
+      "status": "direct",
+      "grx": "grxErrorNotReady",
+      "group": "errors"
+    },
+    "cudaErrorNotSupported": {
+      "status": "direct",
+      "grx": "grxErrorNotSupported",
+      "group": "errors"
+    },
+    "cudaEvent_t": {
+      "status": "direct",
+      "grx": "grxEvent_t",
+      "group": "events"
+    },
+    "cudaEventBlockingSync": {
+      "status": "direct",
+      "grx": "grxEventBlockingSync",
+      "group": "events"
+    },
+    "cudaEventCreate": {
+      "status": "direct",
+      "grx": "grxEventCreate",
+      "group": "events"
+    },
+    "cudaEventCreateWithFlags": {
+      "status": "direct",
+      "grx": "grxEventCreateWithFlags",
+      "group": "events"
+    },
+    "cudaEventDefault": {
+      "status": "direct",
+      "grx": "grxEventDefault",
+      "group": "events"
+    },
+    "cudaEventDestroy": {
+      "status": "direct",
+      "grx": "grxEventDestroy",
+      "group": "events"
+    },
+    "cudaEventDisableTiming": {
+      "status": "direct",
+      "grx": "grxEventDisableTiming",
+      "group": "events"
+    },
+    "cudaEventElapsedTime": {
+      "status": "direct",
+      "grx": "grxEventElapsedTime",
+      "group": "events",
+      "note": "Falls back to the host clock where the driver has no device timestamps."
+    },
+    "cudaEventQuery": {
+      "status": "direct",
+      "grx": "grxEventQuery",
+      "group": "events"
+    },
+    "cudaEventRecord": {
+      "status": "direct",
+      "grx": "grxEventRecord",
+      "group": "events"
+    },
+    "cudaEventSynchronize": {
+      "status": "direct",
+      "grx": "grxEventSynchronize",
+      "group": "events"
+    },
+    "cudaFilterModeLinear": {
+      "status": "direct",
+      "grx": "GRX_TEX_FILTER_LINEAR",
+      "group": "textures"
+    },
+    "cudaFilterModePoint": {
+      "status": "direct",
+      "grx": "GRX_TEX_FILTER_POINT",
+      "group": "textures"
+    },
+    "cudaFree": {
+      "status": "direct",
+      "grx": "grxFree",
+      "group": "memory"
+    },
+    "cudaFreeArray": {
+      "status": "direct",
+      "grx": "grxFreeArray",
+      "group": "textures"
+    },
+    "cudaFreeHost": {
+      "status": "direct",
+      "grx": "grxFreeHost",
+      "group": "memory"
+    },
+    "cudaFuncAttributes": {
+      "status": "direct",
+      "grx": "grxFuncAttributes",
+      "group": "launch"
+    },
+    "cudaFuncGetAttributes": {
+      "status": "direct",
+      "grx": "grxFuncGetAttributes",
+      "group": "launch",
+      "note": "numRegs comes from grxcc metadata, not an occupancy input.",
+      "ref": "7.21"
+    },
+    "cudaGetDevice": {
+      "status": "direct",
+      "grx": "grxGetDevice",
+      "group": "device"
+    },
+    "cudaGetDeviceCount": {
+      "status": "direct",
+      "grx": "grxGetDeviceCount",
+      "group": "device"
+    },
+    "cudaGetDeviceProperties": {
+      "status": "direct",
+      "grx": "grxGetDeviceProperties",
+      "group": "device"
+    },
+    "cudaGetErrorName": {
+      "status": "direct",
+      "grx": "grxGetErrorName",
+      "group": "errors"
+    },
+    "cudaGetErrorString": {
+      "status": "direct",
+      "grx": "grxGetErrorString",
+      "group": "errors"
+    },
+    "cudaGetLastError": {
+      "status": "direct",
+      "grx": "grxGetLastError",
+      "group": "errors"
+    },
+    "cudaGetSymbolAddress": {
+      "status": "direct",
+      "grx": "grxGetSymbolAddress",
+      "group": "memory"
+    },
+    "cudaGetSymbolSize": {
+      "status": "direct",
+      "grx": "grxGetSymbolSize",
+      "group": "memory"
+    },
+    "cudaGraph": {
+      "status": "out",
+      "group": "runtime",
+      "note": "CUDA graphs are out of scope for v1.",
+      "ref": "7.15"
+    },
+    "cudaHostAlloc": {
+      "status": "direct",
+      "grx": "grxMallocHost",
+      "group": "memory",
+      "note": "Write-combining hints are ignored in v1.",
+      "ref": "7.15"
+    },
+    "cudaHostRegister": {
+      "status": "direct",
+      "grx": "grxHostRegister",
+      "group": "memory"
+    },
+    "cudaHostUnregister": {
+      "status": "direct",
+      "grx": "grxHostUnregister",
+      "group": "memory"
+    },
+    "cudaIpc": {
+      "status": "out",
+      "group": "runtime",
+      "note": "IPC handles are out of scope for v1.",
+      "ref": "7.15"
+    },
+    "cudaLaunchCooperativeKernel": {
+      "status": "direct",
+      "grx": "grxLaunchCooperativeKernel",
+      "group": "launch"
+    },
+    "cudaLaunchKernel": {
+      "status": "direct",
+      "grx": "grxLaunchKernel",
+      "group": "launch"
+    },
+    "cudaLaunchKernelExC": {
+      "status": "direct",
+      "grx": "grxLaunchKernelEx",
+      "group": "launch"
+    },
+    "cudaMalloc": {
+      "status": "direct",
+      "grx": "grxMalloc",
+      "group": "memory"
+    },
+    "cudaMallocArray": {
+      "status": "direct",
+      "grx": "grxMallocArray",
+      "group": "textures"
+    },
+    "cudaMallocHost": {
+      "status": "direct",
+      "grx": "grxMallocHost",
+      "group": "memory"
+    },
+    "cudaMallocManaged": {
+      "status": "differs",
+      "grx": "grxMallocManaged",
+      "group": "memory",
+      "note": "Needs a G100 build with virtual memory; not available on FPGA paths."
+    },
+    "cudaMemcpy": {
+      "status": "direct",
+      "grx": "grxMemcpy",
+      "group": "memory"
+    },
+    "cudaMemcpy2D": {
+      "status": "direct",
+      "grx": "grxMemcpy2D",
+      "group": "memory"
+    },
+    "cudaMemcpy2DAsync": {
+      "status": "direct",
+      "grx": "grxMemcpy2DAsync",
+      "group": "memory"
+    },
+    "cudaMemcpyAsync": {
+      "status": "direct",
+      "grx": "grxMemcpyAsync",
+      "group": "memory"
+    },
+    "cudaMemcpyDefault": {
+      "status": "direct",
+      "grx": "grxMemcpyDefault",
+      "group": "memory"
+    },
+    "cudaMemcpyDeviceToDevice": {
+      "status": "direct",
+      "grx": "grxMemcpyDeviceToDevice",
+      "group": "memory"
+    },
+    "cudaMemcpyDeviceToHost": {
+      "status": "direct",
+      "grx": "grxMemcpyDeviceToHost",
+      "group": "memory"
+    },
+    "cudaMemcpyFromSymbol": {
+      "status": "differs",
+      "grx": "grxMemcpyFromSymbol",
+      "group": "memory",
+      "note": "Works for __constant__ variables; refuses __device__ ones.",
+      "ref": "7.23"
+    },
+    "cudaMemcpyHostToDevice": {
+      "status": "direct",
+      "grx": "grxMemcpyHostToDevice",
+      "group": "memory"
+    },
+    "cudaMemcpyHostToHost": {
+      "status": "direct",
+      "grx": "grxMemcpyHostToHost",
+      "group": "memory"
+    },
+    "cudaMemcpyKind": {
+      "status": "direct",
+      "grx": "grxMemcpyKind",
+      "group": "memory"
+    },
+    "cudaMemcpyPeer": {
+      "status": "out",
+      "group": "memory",
+      "note": "Peer-to-peer copies are out of scope for v1.",
+      "ref": "7.15"
+    },
+    "cudaMemcpyPeerAsync": {
+      "status": "out",
+      "group": "memory",
+      "note": "Peer-to-peer copies are out of scope for v1.",
+      "ref": "7.15"
+    },
+    "cudaMemcpyToSymbol": {
+      "status": "differs",
+      "grx": "grxMemcpyToSymbol",
+      "group": "memory",
+      "note": "Works for __constant__ variables; refuses __device__ ones.",
+      "ref": "7.23"
+    },
+    "cudaMemGetInfo": {
+      "status": "direct",
+      "grx": "grxMemGetInfo",
+      "group": "device"
+    },
+    "cudaMemset": {
+      "status": "direct",
+      "grx": "grxMemset",
+      "group": "memory"
+    },
+    "cudaMemsetAsync": {
+      "status": "direct",
+      "grx": "grxMemsetAsync",
+      "group": "memory"
+    },
+    "cudaOccupancyMaxActiveBlocksPerMultiprocessor": {
+      "status": "direct",
+      "grx": "grxOccupancyMaxActiveBlocksPerMultiprocessor",
+      "group": "launch"
+    },
+    "cudaOccupancyMaxPotentialBlockSize": {
+      "status": "direct",
+      "grx": "grxOccupancyMaxPotentialBlockSize",
+      "group": "launch"
+    },
+    "cudaPeekAtLastError": {
+      "status": "direct",
+      "grx": "grxPeekAtLastError",
+      "group": "errors"
+    },
+    "cudaPointerAttributes": {
+      "status": "direct",
+      "grx": "grxPointerAttributes",
+      "group": "memory"
+    },
+    "cudaPointerGetAttributes": {
+      "status": "direct",
+      "grx": "grxPointerGetAttributes",
+      "group": "memory"
+    },
+    "cudaSetDevice": {
+      "status": "direct",
+      "grx": "grxSetDevice",
+      "group": "device"
+    },
+    "cudaStream_t": {
+      "status": "direct",
+      "grx": "grxStream_t",
+      "group": "streams"
+    },
+    "cudaStreamCreate": {
+      "status": "direct",
+      "grx": "grxStreamCreate",
+      "group": "streams"
+    },
+    "cudaStreamCreateWithFlags": {
+      "status": "direct",
+      "grx": "grxStreamCreateWithFlags",
+      "group": "streams"
+    },
+    "cudaStreamCreateWithPriority": {
+      "status": "direct",
+      "grx": "grxStreamCreateWithPriority",
+      "group": "streams"
+    },
+    "cudaStreamDefault": {
+      "status": "direct",
+      "grx": "grxStreamDefault",
+      "group": "streams"
+    },
+    "cudaStreamDestroy": {
+      "status": "direct",
+      "grx": "grxStreamDestroy",
+      "group": "streams"
+    },
+    "cudaStreamNonBlocking": {
+      "status": "direct",
+      "grx": "grxStreamNonBlocking",
+      "group": "streams"
+    },
+    "cudaStreamQuery": {
+      "status": "direct",
+      "grx": "grxStreamQuery",
+      "group": "streams"
+    },
+    "cudaStreamSynchronize": {
+      "status": "direct",
+      "grx": "grxStreamSynchronize",
+      "group": "streams"
+    },
+    "cudaStreamWaitEvent": {
+      "status": "direct",
+      "grx": "grxStreamWaitEvent",
+      "group": "streams"
+    },
+    "cudaSuccess": {
+      "status": "direct",
+      "grx": "grxSuccess",
+      "group": "errors"
+    },
+    "cudaTextureDesc": {
+      "status": "direct",
+      "grx": "grxTextureDesc_t",
+      "group": "textures"
+    },
+    "cudaTextureObject_t": {
+      "status": "direct",
+      "grx": "grxTextureObject_t",
+      "group": "textures"
+    },
+    "cudnn": {
+      "status": "partial",
+      "group": "libraries",
+      "note": "grxDNN has a different API covering softmax, layer norm, GELU, bias add and attention forward.",
+      "ref": null,
+      "grx": "grxDNN"
+    },
+    "cufft": {
+      "status": "planned",
+      "group": "libraries",
+      "note": "grxFFT is planned; not in GRXCP yet.",
+      "ref": null,
+      "grx": "grxFFT"
+    },
+    "curand": {
+      "status": "planned",
+      "group": "libraries",
+      "note": "grxRAND is planned; not in GRXCP yet.",
+      "ref": null,
+      "grx": "grxRAND"
+    },
+    "cusparse": {
+      "status": "planned",
+      "group": "libraries",
+      "note": "grxSPARSE is planned; not in GRXCP yet.",
+      "ref": null,
+      "grx": "grxSPARSE"
+    },
+    "grid_group": {
+      "status": "differs",
+      "group": "device",
+      "note": "grid.sync() is cluster-scoped: grid-wide only on a single-cluster device.",
+      "ref": "7.17"
+    },
+    "gridDim": {
+      "status": "same",
+      "group": "device"
+    },
+    "labeled_partition": {
+      "status": "out",
+      "group": "device",
+      "note": "Out of scope for v1."
+    },
+    "nvcuda::wmma": {
+      "status": "differs",
+      "group": "tensor",
+      "note": "Use grx::wmma. Fragment shapes come from the build (8×4×8 for fp16 in the development configuration), not 16×16×16.",
+      "ref": "7.9",
+      "grx": "grx::wmma"
+    },
+    "printf": {
+      "status": "same",
+      "group": "device"
+    },
+    "tex1D": {
+      "status": "differs",
+      "group": "textures",
+      "note": "Use grx::tex<>: textures are sampled in software from global memory.",
+      "ref": "7.8",
+      "grx": "grx::tex"
+    },
+    "tex1Dfetch": {
+      "status": "differs",
+      "group": "textures",
+      "note": "Use grx::tex<>: textures are sampled in software from global memory.",
+      "ref": "7.8",
+      "grx": "grx::tex"
+    },
+    "tex2D": {
+      "status": "differs",
+      "group": "textures",
+      "note": "Use grx::tex<>: textures are sampled in software from global memory.",
+      "ref": "7.8",
+      "grx": "grx::tex"
+    },
+    "tex3D": {
+      "status": "differs",
+      "group": "textures",
+      "note": "Use grx::tex<>: textures are sampled in software from global memory.",
+      "ref": "7.8",
+      "grx": "grx::tex"
+    },
+    "this_grid": {
+      "status": "differs",
+      "group": "device",
+      "note": "grid.sync() is cluster-scoped: grid-wide only on a single-cluster device.",
+      "ref": "7.17"
+    },
+    "threadIdx": {
+      "status": "same",
+      "group": "device"
+    },
+    "thrust": {
+      "status": "planned",
+      "group": "libraries",
+      "note": "grx::par (header-only) is planned; not in GRXCP yet.",
+      "ref": null,
+      "grx": "grx::par"
+    },
+    "warpSize": {
+      "status": "same",
+      "group": "device",
+      "note": "Read it rather than assuming 32: the warp width is a build option."
+    },
+    "wmma": {
+      "status": "differs",
+      "group": "tensor",
+      "note": "Use grx::wmma. Fragment shapes come from the build (8×4×8 for fp16 in the development configuration), not 16×16×16.",
+      "ref": "7.9",
+      "grx": "grx::wmma"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import LabForm from '../../components/LabForm.astro';
+---
+<Base title="For Labs" description="Evaluation board allocations and grant support for university labs and research institutions.">
+  <PageHead eyebrow="Academic allocations" title="From simulation to real silicon.">
+    GRX930 runs in simulation on a laptop and builds for the Nexys Video (Artix-7 200T) FPGA board. We help qualified university labs and research teams make that jump, with a datasheet written to be copied into grant proposals.
+  </PageHead>
+  <section style="padding-top:0">
+    <div class="wrap bento">
+      <article class="card"><span class="tag">01 · Simulate</span><h3>Start free</h3><p>Clone grx930 and run the NPU and full-SoC test suites in Icarus Verilog on a laptop. No license, no sign-up.</p></article>
+      <article class="card"><span class="tag">02 · Apply</span><h3>Request a board</h3><p>Tell us about your research. We review requests on a rolling basis and prioritise teaching labs and published work.</p></article>
+      <article class="card"><span class="tag">03 · Validate</span><h3>Run on hardware</h3><p>Build the GRX930 bitstream for the Nexys Video and run the same firmware tests on a real board.</p></article>
+    </div>
+  </section>
+  <section class="section-line">
+    <div class="wrap grant">
+      <div>
+        <span class="eyebrow">Grant support</span>
+        <h2>Built to fit your funding proposal.</h2>
+        <p>Our datasheet has the hardware description, specifications and pricing in the format research infrastructure proposals usually ask for, so you can paste it straight into an application.</p>
+        <p class="note mono"><span class="tbc">TBC</span> Confirm eligibility wording for specific programs (e.g. NSF, NSERC) before launch.</p>
+        <div class="btn-row"><a class="btn btn-ghost" href="/gridworkz-grant-datasheet.pdf">Download grant datasheet (PDF)</a></div>
+      </div>
+      <LabForm />
+    </div>
+  </section>
+</Base>
+<style>
+  .grant { display: grid; gap: 48px; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 900px) { .grant { grid-template-columns: .8fr 1.2fr; } }
+  .note { font-size: .78rem; }
+</style>

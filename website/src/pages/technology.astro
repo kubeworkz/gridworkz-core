@@ -1,0 +1,150 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import Architecture from '../components/Architecture.astro';
+import { site } from '../site';
+
+// Every row comes from the grx930 / grxgpu / grxcp repos. `status` says how
+// far the claim has been proven; keep it honest when updating.
+type Status = 'verified' | 'timing' | 'progress' | 'design';
+const statusLabel: Record<Status, string> = {
+  verified: 'Verified in sim',
+  timing: 'Timing closed',
+  progress: 'In progress',
+  design: 'Design',
+};
+const specs: { block: string; param: string; spec: string; status: Status }[] = [
+  { block: 'GRX930', param: 'CPU', spec: '4 × RV64IMAC, 5-stage in-order, AMO/LR/SC', status: 'verified' },
+  { block: 'GRX930', param: 'Caches', spec: 'Per-core I/D caches (256-bit lines); shared 4-way write-back L2 with invalidation coherence', status: 'verified' },
+  { block: 'GRX930', param: 'NPU', spec: '2 × 8×8 systolic GEMM, DMA, command queue (depth 4), sigmoid/tanh activation', status: 'verified' },
+  { block: 'GRX930', param: 'NPU datatypes', spec: 'INT4, INT8, INT16, FP16, BF16 (18/18 sweep cases pass)', status: 'verified' },
+  { block: 'GRX930', param: 'Fabric', spec: '4-master AXI4 crossbar, 64-bit data; DMA arbiter with equivalence gate', status: 'verified' },
+  { block: 'GRX930', param: 'FPGA', spec: 'Artix-7 xc7a200t (Nexys Video): ~121 MHz post-implementation, 0 failing endpoints', status: 'timing' },
+  { block: 'GRX930', param: 'FPGA utilization', spec: '125,735 LUTs (94%), 67,007 FFs, 55 BRAM, 227 DSP', status: 'timing' },
+  { block: 'GRX930 test chip', param: 'Process', spec: 'GF180MCU 180 nm via wafer.space: single core, 50 MHz, boots from on-chip ROM. GDS due Dec 16, 2026', status: 'progress' },
+  { block: 'G100', param: 'Architecture', spec: 'Vortex-based RISC-V GPU: tensor cores (WGMMA), DXA, ray tracing, graphics pipeline', status: 'verified' },
+  { block: 'G100', param: 'Tensor formats', spec: 'fp32, tf32, fp16, bf16, fp8, bf8, int8', status: 'verified' },
+  { block: 'G100', param: 'Discovery config', spec: '1 cluster × 4 cores, TCU + DXA; SGEMM K=64/512 pass vs host reference, pending independent review', status: 'progress' },
+  { block: 'PTA', param: 'Photonic tile', spec: '128 × 64 GEMM tile, planned as a chiplet beside the G100; error-modelled against a frozen MNIST canary', status: 'design' },
+  { block: 'Software', param: 'GRXCP', spec: 'CUDA-style runtime (libgrxrt), single-source compiler (grxcc), grxBLAS, grx-smi / grx-prof / grx-sanitize', status: 'progress' },
+  { block: 'Verification', param: 'Tools', spec: 'Icarus Verilog, SymbiYosys formal, Verilator; G100 on SimX and RTL simulation', status: 'verified' },
+];
+---
+<Base title="Technology" description="GRX930 RISC-V SoC with dual NPUs, the G100 open RISC-V GPU, a photonic tensor accelerator in design, and the GRXCP software platform.">
+  <PageHead eyebrow="Technology" title="What's built, what's verified, what's next.">
+    Two chips in the open: the GRX930 RISC-V SoC with dual NPUs, and the G100 GPU. A photonic tensor accelerator
+    is in design, and GRXCP ties them together with a CUDA-style programming model. Every row below says how far it has been proven.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap"><Architecture /></div>
+  </section>
+
+  <section class="section-line" id="specs">
+    <div class="wrap">
+      <span class="eyebrow">Specifications</span>
+      <h2>Specs matrix</h2>
+      <div class="filter">
+        <input type="search" placeholder="Filter: NPU, FPGA, bf16…" aria-label="Filter specifications" data-filter class="mono" />
+        <span class="mono legend">
+          {(Object.keys(statusLabel) as Status[]).map((k) => <span class={`st st-${k}`}>{statusLabel[k]}</span>)}
+        </span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="specs" data-specs>
+          <thead><tr><th>Block</th><th>Parameter</th><th>Specification</th><th>Status</th></tr></thead>
+          <tbody>
+            {specs.map((s) => (
+              <tr>
+                <td class="mono blk">{s.block}</td>
+                <td>{s.param}</td>
+                <td class="mono">{s.spec}</td>
+                <td><span class={`st st-${s.status}`}>{statusLabel[s.status]}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="empty mono" hidden data-empty>No matching specs.</p>
+      </div>
+      <p class="note mono">Sources: <a href={site.hw.soc}>grx930</a>, <a href={site.hw.gpu}>grxgpu</a> and <a href={site.hw.sdk}>grxcp</a> on GitHub.</p>
+    </div>
+  </section>
+
+  <section class="section-line" id="sdk">
+    <div class="wrap sdk">
+      <div>
+        <span class="eyebrow">Software</span>
+        <h2>GRXCP: the GRX Compute Platform.</h2>
+        <p>A CUDA-class programming platform for the G100 and GRX930. Write <code>__global__</code> kernels and <code>&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> launches in one file; <code>grxcc</code> splits and compiles it, and <code>libgrxrt</code> runs it on top of the G100 driver.</p>
+        <ul class="feat">
+          <li><b>libgrxrt</b> runtime: grxMalloc, grxMemcpy, streams, events</li>
+          <li><b>grxcc</b> single-source compiler driver, built on the VOLT LLVM toolchain</li>
+          <li><b>grxBLAS</b> and friends, including an int8 GEMM route for the PTA</li>
+          <li><b>grx_cuda_compat.h</b> maps cudaX to grxX, so porting CUDA is one include</li>
+        </ul>
+        <p class="note mono">In active development and tested on the G100 simulators.</p>
+        <div class="btn-row"><a class="btn btn-primary" href={site.hw.sdk}>GRXCP on GitHub ↗</a><a class="btn btn-ghost" href="/docs/software/grxcp">GRXCP docs</a></div>
+      </div>
+      <pre class="code"><code><span class="c">// From grxcp/tests/grxcc/vecadd.grx.cpp</span>
+<span class="k">#include</span> &lt;grx/grx.h&gt;
+
+<span class="k">__global__</span> <span class="t">void</span> axpy(<span class="t">const float</span>* x, <span class="t">float</span>* y,
+                     <span class="t">unsigned int</span> n, <span class="t">float</span> a) {'{'}
+  <span class="t">const unsigned int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="k">if</span> (i &lt; n) y[i] = a * x[i] + y[i];
+{'}'}
+
+<span class="c">// Host side, same file</span>
+grxMalloc((<span class="t">void</span>**)&amp;dx, n * <span class="k">sizeof</span>(<span class="t">float</span>));
+grxMalloc((<span class="t">void</span>**)&amp;dy, n * <span class="k">sizeof</span>(<span class="t">float</span>));
+axpy&lt;&lt;&lt;grid, block&gt;&gt;&gt;(dx, dy, n, alpha);
+grxDeviceSynchronize();
+grxMemcpy(got.data(), dy, n * <span class="k">sizeof</span>(<span class="t">float</span>), grxMemcpyDefault);</code></pre>
+    </div>
+  </section>
+</Base>
+<style>
+  .filter { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; margin: 24px 0 16px; }
+  .filter input {
+    flex: 1 1 260px; max-width: 380px; padding: 10px 14px; font-size: .88rem; color: var(--gw-white);
+    background: var(--gw-surface); border: 1px solid var(--gw-line-strong); border-radius: var(--gw-radius);
+  }
+  .filter input:focus { outline: none; border-color: var(--gw-teal); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; }
+  .st { display: inline-block; font: 500 .66rem/1 var(--gw-font-mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; border: 1px solid; white-space: nowrap; }
+  .st-verified { color: var(--gw-green); border-color: #39ff1455; }
+  .st-timing { color: var(--gw-teal); border-color: #00f5d455; }
+  .st-progress { color: #ffb020; border-color: #ffb02066; }
+  .st-design { color: #b9a3ff; border-color: #b9a3ff66; }
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--gw-line); border-radius: 10px; }
+  .specs { width: 100%; border-collapse: collapse; min-width: 760px; font-size: .9rem; }
+  .specs th, .specs td { text-align: left; padding: 13px 18px; border-bottom: 1px solid var(--gw-line); vertical-align: top; }
+  .specs th { font: 500 .7rem/1 var(--gw-font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--gw-steel); background: var(--gw-surface); }
+  .specs td { color: var(--gw-white); }
+  .specs td.mono { font-size: .8rem; line-height: 1.55; }
+  .specs tbody tr:hover { background: #0f1d1d; }
+  .blk { color: var(--gw-teal) !important; font-size: .78rem; white-space: nowrap; }
+  .empty { padding: 18px; }
+  .note { font-size: .75rem; margin-top: 14px; }
+  .sdk { display: grid; gap: 48px; grid-template-columns: 1fr; align-items: center; }
+  @media (min-width: 960px) { .sdk { grid-template-columns: 1fr 1fr; } }
+  .sdk > * { min-width: 0; }
+  .feat { padding: 0; list-style: none; display: grid; gap: 10px; }
+  .feat li { padding-left: 18px; position: relative; }
+  .feat li::before { content: '▸'; color: var(--gw-teal); position: absolute; left: 0; }
+  .feat b { font-family: var(--gw-font-mono); color: var(--gw-white); font-weight: 500; font-size: .9em; }
+  code { color: var(--gw-white); font-size: .9em; }
+  .code { margin: 0; padding: 24px; background: #05060a; border: 1px solid var(--gw-line-strong); border-radius: 10px; font-size: .8rem; line-height: 1.75; color: var(--gw-white); overflow-x: auto; }
+  .c { color: #5c6678; } .k { color: var(--gw-teal); } .t { color: #7aa2ff; }
+</style>
+<script>
+  const input = document.querySelector<HTMLInputElement>('[data-filter]');
+  const rows = document.querySelectorAll<HTMLTableRowElement>('[data-specs] tbody tr');
+  const empty = document.querySelector<HTMLElement>('[data-empty]');
+  input?.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    let shown = 0;
+    rows.forEach((r) => { const m = r.textContent!.toLowerCase().includes(q); r.hidden = !m; if (m) shown++; });
+    if (empty) empty.hidden = shown > 0;
+  });
+</script>

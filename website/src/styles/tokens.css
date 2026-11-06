@@ -1,0 +1,15 @@
+:root {
+  --gw-bg: #090a0f;          /* Obsidian */
+  --gw-surface: #10121a;
+  --gw-line: #161923;        /* Silicon Gray */
+  --gw-line-strong: #252a38;
+  --gw-teal: #00f5d4;        /* Laser Teal */
+  --gw-teal-dim: #00f5d41f;
+  --gw-green: #39ff14;       /* Terminal green */
+  --gw-white: #ffffff;
+  --gw-steel: #8f9cae;       /* Muted Steel */
+  --gw-font-sans: 'Space Grotesk', system-ui, sans-serif;
+  --gw-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --gw-radius: 6px;
+  --gw-max: 1160px;
+}

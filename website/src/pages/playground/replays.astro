@@ -1,0 +1,126 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import Via from '../../components/Via.astro';
+import { loadSimResults, RESULTS_BASE, BRANCH_URL } from '../../lib/simResults';
+import { site } from '../../site';
+
+const { results, tails, reason } = await loadSimResults();
+if (!results) console.warn(`[replays] no published results yet (${reason})`);
+const passed = results ? results.runs.filter((r) => r.status === 'pass').length : 0;
+const when = results ? new Date(results.generated_at) : null;
+const fmtDate = (d: Date) => d.toLocaleString('en-US', { timeZone: 'UTC', dateStyle: 'medium', timeStyle: 'short' }) + ' UTC';
+const dur = (s: number) => (s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`);
+const label = { pass: 'Passed', fail: 'Failed', timeout: 'Timed out' } as const;
+---
+<Base title="Simulation replays" description="The latest real GRX930 simulation runs: NPU GEMMs, hazard and arbiter equivalence checks, and the full four-core SoC, with their logs.">
+  <PageHead eyebrow="Playground · Simulation replays" title="Real runs, not descriptions of them.">
+    Every push to grx930's main branch runs the NPU, CPU and full-SoC test suites in Icarus Verilog on a clean machine.
+    This page shows the latest run as it happened: pass or fail, how long it took, and what the testbenches printed.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <p class="model mono"><span class="st st-replay">Replayed RTL</span> Output of the real RTL and testbenches in <a href={site.hw.soc}>kubeworkz/grx930</a>, published by its <code>sim-replays</code> workflow and picked up when this site builds. Failures are shown too.</p>
+
+      {results ? (
+        <>
+          <div class="card summary">
+            <div class="big">
+              <span class={`dot ${passed === results.runs.length ? 'ok' : 'bad'}`}></span>
+              {passed} of {results.runs.length} simulations passed
+            </div>
+            <dl class="mono">
+              {results.commit && <div><dt>Commit</dt><dd><a href={`https://github.com/${results.repo}/commit/${results.commit}`}>{results.commit.slice(0, 7)}</a></dd></div>}
+              {when && <div><dt>Ran</dt><dd>{fmtDate(when)}</dd></div>}
+              {results.simulator && <div><dt>Simulator</dt><dd>{results.simulator}</dd></div>}
+              <div><dt>Total time</dt><dd>{dur(results.runs.reduce((a, r) => a + r.seconds, 0))}</dd></div>
+            </dl>
+            <p class="links mono">
+              {results.run_url && <a href={results.run_url}>The workflow run ↗</a>}
+              <a href={BRANCH_URL}>All logs ↗</a>
+            </p>
+          </div>
+
+          <div class="runs">
+            {results.runs.map((r) => (
+              <article class={`card run ${r.status}`}>
+                <header>
+                  <div>
+                    <h3 class="mono">{r.id}</h3>
+                    <p class="checks">{r.checks}</p>
+                  </div>
+                  <span class={`st st-${r.status}`}>{label[r.status]}</span>
+                </header>
+                <dl class="mono facts">
+                  <div><dt>Command</dt><dd><code>{r.command}</code></dd></div>
+                  <div><dt>Time</dt><dd>{dur(r.seconds)}</dd></div>
+                  <div><dt>PASS verdicts</dt><dd>{r.pass_lines}</dd></div>
+                  {r.fail_lines > 0 && <div><dt>FAIL verdicts</dt><dd class="bad">{r.fail_lines}</dd></div>}
+                  {r.status !== 'pass' && <div><dt>Exit code</dt><dd class="bad">{r.exit_code}</dd></div>}
+                </dl>
+                {tails[r.id] && (
+                  <details open={r.status !== 'pass'}>
+                    <summary class="mono">{tails[r.id].length === 1 ? 'The last line of the log' : `Last ${tails[r.id].length} lines of the log`}</summary>
+                    <pre class="mono"><code>{tails[r.id].map((l) => (
+                      <span class={/\[FAIL\]|\bFAIL\b|FATAL|\$fatal/.test(l) ? 'l-fail' : /\[PASS\]|\bPASS\b/.test(l) ? 'l-pass' : ''}>{l}{'\n'}</span>
+                    ))}</code></pre>
+                  </details>
+                )}
+                <a class="mono full" href={`${RESULTS_BASE}/${r.log}`}>Full log ↗</a>
+              </article>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div class="card pending">
+          <Via size={80} />
+          <div>
+            <h3>The first published run is on its way.</h3>
+            <p>grx930's <code>sim-replays</code> workflow will run the NPU GEMM suites (integer and FP16/BF16), the CPU hazard-unit checks, the DMA arbiter equivalence check and the full four-core SoC, then publish each run's verdict and log here.</p>
+            <p>Until then, the same tests run on your own machine in a few minutes. <a href="/docs/quickstart">See the quickstart →</a></p>
+          </div>
+        </div>
+      )}
+
+      <p class="src mono">Waveforms are next: the testbenches print verdicts today, and a waveform viewer comes once they dump trace files. Want to try the NPU without a simulator? <a href="/playground/npu-registers">Register playground</a> · <a href="/playground/systolic">systolic visualizer</a>.</p>
+    </div>
+  </section>
+</Base>
+<style>
+  .model { font-size: .78rem; margin: 0 0 20px; line-height: 1.6; }
+  .model code { color: var(--gw-white); }
+  .st { display: inline-block; font: 500 .62rem/1 var(--gw-font-mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; border: 1px solid; white-space: nowrap; margin-right: 6px; }
+  .st-replay, .st-pass { color: var(--gw-green); border-color: #39ff1455; }
+  .st-fail, .st-timeout { color: #ff5c7a; border-color: #ff5c7a66; }
+  .summary { margin-bottom: 16px; }
+  .big { display: flex; align-items: center; gap: 12px; font-size: 1.3rem; color: var(--gw-white); margin-bottom: 16px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.ok { background: var(--gw-green); box-shadow: 0 0 10px var(--gw-green); }
+  .dot.bad { background: #ff5c7a; box-shadow: 0 0 10px #ff5c7a; }
+  dl { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 0; }
+  dt { font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gw-steel); }
+  dd { margin: 4px 0 0; color: var(--gw-white); font-size: .82rem; word-break: break-word; }
+  dd.bad { color: #ff5c7a; }
+  .links { display: flex; flex-wrap: wrap; gap: 20px; margin: 16px 0 0; font-size: .8rem; }
+  .runs { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 980px) { .runs { grid-template-columns: 1fr 1fr; } }
+  .runs > * { min-width: 0; }
+  .run { border-left: 2px solid var(--gw-green); }
+  .run.fail, .run.timeout { border-left-color: #ff5c7a; }
+  .run header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+  .run h3 { font-size: 1rem; margin: 0 0 4px; }
+  .checks { margin: 0; font-size: .88rem; }
+  .facts { margin-top: 14px; }
+  code { font-family: var(--gw-font-mono); color: var(--gw-white); font-size: .9em; }
+  details { margin-top: 14px; }
+  summary { font-size: .74rem; color: var(--gw-teal); cursor: pointer; }
+  pre { margin: 10px 0 0; padding: 12px; background: #05060a; border: 1px solid var(--gw-line); border-radius: var(--gw-radius); font-size: .68rem; line-height: 1.55; color: var(--gw-steel); overflow-x: auto; max-height: 320px; }
+  pre :global(.l-pass) { color: var(--gw-green); }
+  pre :global(.l-fail) { color: #ff5c7a; }
+  .full { display: inline-block; font-size: .76rem; margin-top: 12px; }
+  .pending { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .pending > div { flex: 1 1 320px; }
+  .pending h3 { margin-bottom: 10px; }
+  .src { font-size: .72rem; margin: 20px 0 0; }
+</style>

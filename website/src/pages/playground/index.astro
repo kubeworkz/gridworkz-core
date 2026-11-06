@@ -1,0 +1,90 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import Via from '../../components/Via.astro';
+
+const tools = [
+  { href: '/playground/cuda-check', tag: 'Live', title: 'CUDA porting checker', body: 'Paste a CUDA file and see which calls map straight to GRXCP, which differ, and which aren’t available yet.', live: true },
+  { href: '/playground/npu-registers', tag: 'Live · real RTL', title: 'NPU register playground', body: 'Program the GRX930 NPU’s registers and run its real RTL in your browser: start a GEMM, watch BUSY/DONE/ERROR, the queue and the cycle counters, and get the matching C driver code.', live: true },
+  { href: '/playground/systolic', tag: 'Live · model', title: 'Systolic array visualizer', body: 'Pick a matrix shape and precision and watch a GEMM flow through the 8×8 NPU array, pass by pass.', live: true },
+  { href: '/playground/photonic', tag: 'Live · real harness', title: 'Photonic accuracy demo', body: 'Run the PTA’s error model on the MNIST canary in your browser: change the noise and see whether it still passes Gate F.', live: true },
+  { href: '/playground/replays', tag: 'Live · replayed RTL', title: 'Simulation replays', body: 'The latest real GRX930 runs: NPU GEMMs, CPU and arbiter equivalence checks and the full SoC, with pass/fail and logs.', live: true },
+];
+---
+<Base title="Playground" description="Try the Gridworkz ecosystem in your browser: a CUDA porting checker for GRXCP, with an NPU playground, systolic array visualizer and online simulator on the way.">
+  <PageHead eyebrow="Playground" title="Try the chips before the board arrives.">
+    Interactive tools that run in your browser, built from the real designs. Each one says whether it is
+    a model, a replay of real simulation, or the RTL itself.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap bento tools">
+      {tools.map((t) => (
+        t.live ? (
+          <a class="card tool live" href={t.href}>
+            <span class="tag">{t.tag}</span>
+            <h3>{t.title} →</h3>
+            <p>{t.body}</p>
+          </a>
+        ) : (
+          <article class="card tool">
+            <span class="tag soon">{t.tag}</span>
+            <h3>{t.title}</h3>
+            <p>{t.body}</p>
+          </article>
+        )
+      ))}
+    </div>
+  </section>
+
+  <section class="section-line" id="waitlist">
+    <div class="wrap wl">
+      <div>
+        <Via size={72} />
+        <span class="eyebrow" style="margin-top:20px">Online simulator</span>
+        <h2>Run GRXCP kernels on the G100, in your browser.</h2>
+        <p>We’re working toward running real G100 and GRX930 simulations online: write a kernel, run it, see the cycles. Tell us what you’d use it for and we’ll let you know when it’s ready.</p>
+      </div>
+      <form class="card form" name="simulator-waitlist" method="POST" data-netlify="true" netlify-honeypot="website" action="/playground/thanks">
+        <input type="hidden" name="form-name" value="simulator-waitlist" />
+        <p hidden><label>Leave blank <input name="website" /></label></p>
+        <label>Email<input name="email" type="email" required autocomplete="email" /></label>
+        <label><span>Organization <span class="opt">(optional)</span></span><input name="organization" autocomplete="organization" /></label>
+        <fieldset>
+          <legend>What would you try first?</legend>
+          <label class="chk"><input type="checkbox" name="interest" value="GRXCP / CUDA-style kernels on the G100" /> CUDA-style kernels on the G100</label>
+          <label class="chk"><input type="checkbox" name="interest" value="GRX930 NPU GEMMs" /> GEMMs on the GRX930 NPU</label>
+          <label class="chk"><input type="checkbox" name="interest" value="RTL and waveforms" /> The RTL and its waveforms</label>
+          <label class="chk"><input type="checkbox" name="interest" value="Photonic accelerator model" /> The photonic accelerator model</label>
+          <label class="chk"><input type="checkbox" name="interest" value="Development board" /> A development board</label>
+        </fieldset>
+        <button class="btn btn-primary" type="submit">Join the waitlist</button>
+      </form>
+    </div>
+  </section>
+</Base>
+<style>
+  .tools { grid-template-columns: 1fr; }
+  @media (min-width: 760px) { .tools { grid-template-columns: 1fr 1fr; } }
+  .tool h3 { margin-top: 10px; }
+  .tool p { margin: 0; }
+  a.tool { color: inherit; border-color: var(--gw-teal); }
+  a.tool:hover { text-decoration: none; background: #0f1d1d; }
+  a.tool h3 { color: var(--gw-teal); }
+  .tag.soon { color: var(--gw-steel); }
+  .wl { display: grid; gap: 40px; grid-template-columns: 1fr; align-items: start; }
+  @media (min-width: 900px) { .wl { grid-template-columns: 1fr 1fr; } }
+  .form { display: grid; gap: 16px; }
+  .form > label, legend { display: grid; gap: 6px; font: 500 .75rem/1.2 var(--gw-font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--gw-steel); }
+  .opt { text-transform: none; letter-spacing: 0; }
+  .form input:not([type=checkbox]) {
+    font: 400 1rem/1.4 var(--gw-font-sans); color: var(--gw-white); background: var(--gw-bg);
+    border: 1px solid var(--gw-line-strong); border-radius: var(--gw-radius); padding: 10px 12px;
+  }
+  .form input:focus { outline: none; border-color: var(--gw-teal); box-shadow: 0 0 0 3px var(--gw-teal-dim); }
+  fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; }
+  legend { margin-bottom: 8px; }
+  .chk { display: flex; gap: 10px; align-items: center; font-size: .95rem; color: var(--gw-white); cursor: pointer; }
+  .chk input { accent-color: var(--gw-teal); width: 16px; height: 16px; }
+  .form button { justify-self: start; cursor: pointer; }
+</style>

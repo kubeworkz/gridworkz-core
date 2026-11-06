@@ -1,0 +1,267 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import { site } from '../../site';
+---
+<Base title="Systolic array visualizer" description="Watch a GEMM move through the GRX930 NPU's 8×8 weight-stationary systolic array, pass by pass, in your browser.">
+  <PageHead eyebrow="Playground · Systolic array visualizer" title="Watch a GEMM flow through the NPU.">
+    The GRX930's NPU is an 8×8 weight-stationary systolic array. Weights from B sit still in the grid,
+    a row of A flows in from the left, skewed one row per step, and partial sums flow down each column into C.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <p class="model mono"><span class="st">Model</span> Dataflow model of <code>c930_systolic_array.sv</code> and the loop order in <code>c930_npu_core.sv</code>: N tiles, then K tiles, then rows of A. One step here is one hop of the wavefront; the RTL's half-rate hops, weight settle and registered feed are not shown.</p>
+
+      <div class="card ctl">
+        <div class="fields">
+          <label>M <small>rows of A</small><select id="m"></select></label>
+          <label>N <small>cols of B</small><select id="n"></select></label>
+          <label>K <small>reduction</small><select id="k"></select></label>
+          <label>Precision<select id="prec"><option value="0">INT8</option><option value="1">INT16</option><option value="4">INT4</option><option value="2">FP16</option><option value="3">BF16</option></select></label>
+          <button class="btn btn-ghost" id="reroll" type="button">New data</button>
+        </div>
+        <div class="player">
+          <button type="button" id="first" title="First pass" aria-label="First pass">⏮</button>
+          <button type="button" id="back" title="Step back" aria-label="Step back">◀</button>
+          <button type="button" id="play" class="primary" title="Play / pause" aria-label="Play">▶</button>
+          <button type="button" id="fwd" title="Step forward" aria-label="Step forward">▶|</button>
+          <button type="button" id="last" title="Jump to the end" aria-label="Jump to the end">⏭</button>
+          <label class="speed mono">Speed<input id="speed" type="range" min="1" max="10" value="4" /></label>
+          <span class="where mono" id="where"></span>
+        </div>
+        <div class="progress" aria-hidden="true"><span id="bar"></span></div>
+      </div>
+
+      <div class="viz">
+        <div class="card arr">
+          <h3>Systolic array <span id="tileLbl" class="mono"></span></h3>
+          <div class="arr-wrap">
+            <div class="feed mono" id="feed"></div>
+            <div class="grid" id="grid"></div>
+            <div></div>
+            <div class="outs mono" id="outs"></div>
+          </div>
+          <ul class="key mono">
+            <li><i class="k-w"></i>weight from B (stationary)</li>
+            <li><i class="k-a"></i>activation from A, this step</li>
+            <li><i class="k-p"></i>partial sum, this step</li>
+          </ul>
+        </div>
+        <div class="mats">
+          <div class="card"><h4>A <span id="aDims"></span></h4><div class="mat" id="matA"></div></div>
+          <div class="card"><h4>B <span id="bDims"></span></h4><div class="mat" id="matB"></div></div>
+          <div class="card"><h4>C = A × B <span id="cDims"></span></h4><div class="mat" id="matC"></div></div>
+        </div>
+      </div>
+
+      <div class="card stats">
+        <dl class="mono" id="stats"></dl>
+        <p class="verdict" id="verdict"></p>
+      </div>
+      <p class="src mono">Sources: <a href={`${site.hw.soc}/blob/main/c930/rtl/c930_systolic_array.sv`}>c930_systolic_array.sv</a>, <a href={`${site.hw.soc}/blob/main/c930/rtl/c930_npu_core.sv`}>c930_npu_core.sv</a>. Limits are the SoC build's: M ≤ 8, N ≤ 12, K ≤ 16. Next: <a href="/playground/npu-registers">program the same GEMM from the NPU's registers →</a></p>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import { NPU, PREC, rng, randomMatrix, gemm, schedule, type Prec } from '../../lib/npu';
+
+  const $ = (id: string) => document.getElementById(id)!;
+  const sel = (id: string) => $(id) as HTMLSelectElement;
+  const R = NPU.ROWS, Cc = NPU.COLS;
+  for (const [id, max, def] of [['m', NPU.MAX_M, 3], ['n', NPU.MAX_N, 10], ['k', NPU.MAX_K, 12]] as const)
+    sel(id).innerHTML = Array.from({ length: max }, (_, i) => `<option${i + 1 === def ? ' selected' : ''}>${i + 1}</option>`).join('');
+
+  let seed = 930, A: number[][] = [], B: number[][] = [], prec: Prec = 0;
+  let sched = schedule(1, 1, 1), ref: number[][] = [];
+  // Flat timeline: every (pass, hop). Hops 0..kr+nc-1 per pass: the wavefront
+  // reaches PE(r,c) at hop r+c, and column c's sum leaves the bottom after hop kr-1+c.
+  let steps: { p: number; t: number }[] = [];
+  let i = 0, timer: number | undefined;
+
+  const fmt = (v: number) => (PREC[prec].int ? String(v) : Number.isInteger(v) ? v.toFixed(1) : String(+v.toFixed(3)));
+  const acc = (s: number, a: number, w: number) => (PREC[prec].int ? s + a * w : Math.fround(s + Math.fround(a * w)));
+  const wrap = (v: number) => (PREC[prec].int ? Number(BigInt.asIntN(32, BigInt(v))) : v);
+
+  function setup() {
+    const M = +sel('m').value, N = +sel('n').value, K = +sel('k').value;
+    prec = +sel('prec').value as Prec;
+    const r = rng(seed);
+    A = randomMatrix(M, K, prec, r); B = randomMatrix(K, N, prec, r);
+    sched = schedule(M, N, K); ref = gemm(A, B, prec);
+    steps = sched.passes.flatMap((ps, p) => Array.from({ length: ps.kr + ps.nc }, (_, t) => ({ p, t })));
+    i = 0; stop(); render();
+  }
+
+  /** C as it stands after `upto` steps: completed columns of finished passes. */
+  function cState(upto: number) {
+    const M = A.length, N = B[0].length;
+    const C: (number | null)[][] = Array.from({ length: M }, () => Array(N).fill(null));
+    const kDone: number[][] = Array.from({ length: M }, () => Array(N).fill(0));
+    for (let s = 0; s <= upto && s < steps.length; s++) {
+      const { p, t } = steps[s], ps = sched.passes[p];
+      for (let c = 0; c < ps.nc; c++) {
+        if (t !== ps.kr - 1 + c) continue; // column c's sum leaves the array now
+        let v = C[ps.m][ps.n0 + c] ?? 0;
+        for (let r = 0; r < ps.kr; r++) v = acc(v, A[ps.m][ps.k0 + r], B[ps.k0 + r][ps.n0 + c]);
+        C[ps.m][ps.n0 + c] = v; kDone[ps.m][ps.n0 + c] = ps.k0 + ps.kr;
+      }
+    }
+    return { C, kDone };
+  }
+
+  function render() {
+    const M = A.length, K = B.length, N = B[0].length;
+    const { p, t } = steps[i], ps = sched.passes[p];
+    const last = i === steps.length - 1;
+    $('where').textContent = `pass ${p + 1}/${sched.passes.length} · step ${t + 1}/${ps.kr + ps.nc}`;
+    ($('bar') as HTMLElement).style.width = `${((i + 1) / steps.length) * 100}%`;
+    $('tileLbl').textContent = `N tile ${ps.ni + 1}/${sched.nt} · K tile ${ps.ki + 1}/${sched.kt} · row m=${ps.m}`;
+    $('play').textContent = timer ? '❚❚' : '▶';
+
+    // Partial sums entering each PE this step (the column's carry-in plus rows above).
+    const { C, kDone } = cState(i - 1);
+    let cells = '';
+    for (let r = 0; r < R; r++) for (let c = 0; c < Cc; c++) {
+      const live = r < ps.kr && c < ps.nc;
+      if (!live) { cells += `<div class="pe off"></div>`; continue; }
+      const w = B[ps.k0 + r][ps.n0 + c];
+      const hot = t === r + c;
+      let inner = `<span class="w">${fmt(w)}</span>`;
+      if (hot) {
+        const a = A[ps.m][ps.k0 + r];
+        let s = ps.ki === 0 ? 0 : (C[ps.m][ps.n0 + c] ?? 0);
+        for (let rr = 0; rr <= r; rr++) s = acc(s, A[ps.m][ps.k0 + rr], B[ps.k0 + rr][ps.n0 + c]);
+        inner += `<span class="a">×${fmt(a)}</span><span class="p">Σ ${fmt(s)}</span>`;
+      }
+      cells += `<div class="pe${hot ? ' hot' : ''}${t > r + c ? ' past' : ''}">${inner}</div>`;
+    }
+    $('grid').innerHTML = cells;
+    $('feed').innerHTML = Array.from({ length: R }, (_, r) =>
+      `<div class="${r < ps.kr && t === r ? 'in' : ''}">${r < ps.kr ? `a<sub>${ps.k0 + r}</sub>` : ''}</div>`).join('');
+    $('outs').innerHTML = Array.from({ length: Cc }, (_, c) =>
+      `<div class="${c < ps.nc && t === ps.kr - 1 + c ? 'out' : ''}">${c < ps.nc ? `c<sub>${ps.n0 + c}</sub>` : ''}</div>`).join('');
+
+    // Matrices
+    const after = cState(i);
+    const mat = (rows: number, cols: number, cell: (r: number, c: number) => [string, string]) =>
+      `<table style="--cols:${cols}">${Array.from({ length: rows }, (_, r) =>
+        `<tr>${Array.from({ length: cols }, (_, c) => { const [v, cls] = cell(r, c); return `<td class="${cls}">${v}</td>`; }).join('')}</tr>`).join('')}</table>`;
+    $('aDims').textContent = `${M}×${K}`; $('bDims').textContent = `${K}×${N}`; $('cDims').textContent = `${M}×${N}`;
+    $('matA').innerHTML = mat(M, K, (r, c) => [fmt(A[r][c]),
+      r === ps.m && c >= ps.k0 && c < ps.k0 + ps.kr ? (t === c - ps.k0 ? 'hl hot' : 'hl') : '']);
+    $('matB').innerHTML = mat(K, N, (r, c) => [fmt(B[r][c]),
+      r >= ps.k0 && r < ps.k0 + ps.kr && c >= ps.n0 && c < ps.n0 + ps.nc ? 'tile' : '']);
+    $('matC').innerHTML = mat(M, N, (r, c) => {
+      const v = after.C[r][c];
+      if (v === null) return ['·', 'empty'];
+      const full = after.kDone[r][c] >= K;
+      const now = r === ps.m && c >= ps.n0 && c < ps.n0 + ps.nc;
+      return [fmt(full ? wrap(v) : v), `${full ? 'done' : 'partial'}${now ? ' now' : ''}`];
+    });
+
+    // Stats
+    const util = (sched.useful / sched.slots) * 100;
+    $('stats').innerHTML = `
+      <div><dt>N tiles × K tiles</dt><dd>${sched.nt} × ${sched.kt}</dd></div>
+      <div><dt>Weight tiles loaded</dt><dd>${sched.weightTiles} <small>each once</small></dd></div>
+      <div><dt>Array passes</dt><dd>${sched.passes.length} <small>one row of A each</small></dd></div>
+      <div><dt>Useful MACs</dt><dd>${sched.useful} <small>of ${sched.slots} PE slots · ${util.toFixed(0)}%</small></dd></div>`;
+    if (last) {
+      const ok = ref.every((row, r) => row.every((v, c) => Object.is(wrap(after.C[r][c] ?? NaN), v) || wrap(after.C[r][c] ?? NaN) === v));
+      $('verdict').innerHTML = ok
+        ? `<b class="ok">✓ C matches a reference GEMM.</b> ${PREC[prec].int ? 'Integer results are exact (C keeps the low 32 bits).' : 'Float results use FP32 in K order; the RTL’s own rounding is not modeled, so treat them as approximate.'}`
+        : `<b class="bad">✗ Mismatch against the reference GEMM.</b>`;
+    } else {
+      $('verdict').innerHTML = `Partial sums in <span class="partial-t">grey</span> are waiting for their next K tile; <span class="done-t">green</span> values are final.`;
+    }
+  }
+
+  const go = (j: number) => { i = Math.max(0, Math.min(steps.length - 1, j)); render(); };
+  function stop() { if (timer) { clearInterval(timer); timer = undefined; } }
+  function play() {
+    if (timer) { stop(); render(); return; }
+    if (i >= steps.length - 1) i = 0;
+    const ms = 1100 - +($('speed') as HTMLInputElement).value * 100;
+    timer = window.setInterval(() => { if (i >= steps.length - 1) { stop(); render(); return; } go(i + 1); }, ms);
+    render();
+  }
+  $('play').addEventListener('click', play);
+  $('fwd').addEventListener('click', () => { stop(); go(i + 1); });
+  $('back').addEventListener('click', () => { stop(); go(i - 1); });
+  $('first').addEventListener('click', () => { stop(); go(0); });
+  $('last').addEventListener('click', () => { stop(); go(steps.length - 1); });
+  $('speed').addEventListener('input', () => { if (timer) { stop(); play(); } });
+  $('reroll').addEventListener('click', () => { seed = (seed * 1103515245 + 12345) >>> 0; setup(); });
+  for (const id of ['m', 'n', 'k', 'prec']) $(id).addEventListener('change', setup);
+  setup();
+</script>
+
+<style>
+  .model { font-size: .78rem; margin: 0 0 20px; line-height: 1.6; }
+  .model code { color: var(--gw-white); }
+  .st { display: inline-block; font: 500 .62rem/1 var(--gw-font-mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; border: 1px solid #b9a3ff66; color: #b9a3ff; margin-right: 6px; }
+  .ctl { margin-bottom: 16px; }
+  .fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  .fields label { display: grid; gap: 6px; font: 500 .7rem/1.2 var(--gw-font-mono); letter-spacing: .06em; color: var(--gw-steel); }
+  .fields small { font-size: .65rem; letter-spacing: 0; color: #5c6678; margin-left: 4px; }
+  .fields select { font: 400 .9rem/1.3 var(--gw-font-mono); color: var(--gw-white); background: var(--gw-bg); border: 1px solid var(--gw-line-strong); border-radius: var(--gw-radius); padding: 8px 10px; min-width: 90px; }
+  .fields .btn { cursor: pointer; padding: .7em 1.1em; }
+  .player { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px; }
+  .player button { font: 500 .85rem/1 var(--gw-font-mono); color: var(--gw-white); background: transparent; border: 1px solid var(--gw-line-strong); border-radius: var(--gw-radius); padding: 8px 12px; cursor: pointer; min-width: 42px; }
+  .player button:hover { border-color: var(--gw-teal); }
+  .player button.primary { background: var(--gw-teal); color: var(--gw-bg); border-color: var(--gw-teal); }
+  .speed { display: inline-flex; gap: 8px; align-items: center; font-size: .7rem; color: var(--gw-steel); margin-left: 8px; }
+  .speed input { accent-color: var(--gw-teal); width: 90px; }
+  .where { margin-left: auto; font-size: .75rem; color: var(--gw-white); }
+  .progress { height: 3px; background: var(--gw-line); border-radius: 2px; margin-top: 14px; overflow: hidden; }
+  .progress span { display: block; height: 100%; background: var(--gw-teal); transition: width .15s; }
+  .viz { display: grid; gap: 16px; grid-template-columns: 1fr; margin-bottom: 16px; }
+  @media (min-width: 1040px) { .viz { grid-template-columns: 1.15fr 1fr; } }
+  .viz > * { min-width: 0; }
+  h3 { font-size: 1.05rem; margin-bottom: 14px; }
+  h3 span { font-size: .72rem; color: var(--gw-steel); font-weight: 400; margin-left: 6px; }
+  .arr-wrap { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; }
+  .grid :global(.pe) { aspect-ratio: 1; border: 1px solid var(--gw-line-strong); border-radius: 4px; background: #0b0d13; display: grid; align-content: center; justify-items: center; gap: 1px; font: 500 .62rem/1.1 var(--gw-font-mono); overflow: hidden; transition: background .15s, border-color .15s; }
+  .grid :global(.pe.off) { opacity: .25; border-style: dashed; }
+  .grid :global(.pe .w) { color: #7aa2ff; }
+  .grid :global(.pe.past .w) { color: #4a5a85; }
+  .grid :global(.pe.hot) { border-color: var(--gw-teal); background: #0f1d1d; box-shadow: 0 0 12px -2px #00f5d466; }
+  .grid :global(.pe .a) { color: var(--gw-teal); }
+  .grid :global(.pe .p) { color: var(--gw-green); }
+  .feed { display: grid; grid-template-rows: repeat(8, minmax(0, 1fr)); gap: 4px; font-size: .6rem; color: #5c6678; }
+  .feed :global(div) { display: grid; place-items: center; }
+  .feed :global(.in) { color: var(--gw-teal); }
+  .outs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; font-size: .6rem; color: #5c6678; text-align: center; }
+  .outs :global(.out) { color: var(--gw-green); }
+  .key { list-style: none; padding: 0; margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: .68rem; }
+  .key i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  .k-w { background: #7aa2ff; } .k-a { background: var(--gw-teal); } .k-p { background: var(--gw-green); }
+  .mats { display: grid; gap: 16px; align-content: start; grid-template-columns: minmax(0, 1fr); }
+  .mats > * { min-width: 0; }
+  h4 { font: 500 .7rem/1 var(--gw-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gw-teal); margin: 0 0 10px; }
+  h4 span { color: var(--gw-steel); letter-spacing: 0; margin-left: 6px; }
+  .mat { overflow-x: auto; }
+  .mat :global(table) { border-collapse: separate; border-spacing: 2px; font: 400 .66rem/1 var(--gw-font-mono); }
+  .mat :global(td) { min-width: 30px; padding: 5px 3px; text-align: center; color: var(--gw-steel); background: #0b0d13; border-radius: 3px; }
+  .mat :global(td.hl) { color: var(--gw-white); background: #12302c; }
+  .mat :global(td.hl.hot) { color: var(--gw-bg); background: var(--gw-teal); }
+  .mat :global(td.tile) { color: var(--gw-white); background: #1a2440; }
+  .mat :global(td.empty) { color: #2f3647; }
+  .mat :global(td.partial) { color: #8f9cae; background: #161923; }
+  .mat :global(td.done) { color: var(--gw-green); }
+  .mat :global(td.now) { outline: 1px solid var(--gw-green); }
+  .stats dl { display: flex; flex-wrap: wrap; gap: 12px 32px; margin: 0; }
+  .stats :global(dt) { font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gw-steel); }
+  .stats :global(dd) { margin: 4px 0 0; color: var(--gw-white); font-size: 1.1rem; }
+  .stats :global(dd small) { font-size: .7rem; color: var(--gw-steel); margin-left: 4px; }
+  .verdict { margin: 16px 0 0; font-size: .9rem; }
+  .verdict :global(.ok) { color: var(--gw-green); font-weight: 500; }
+  .verdict :global(.bad) { color: #ff5c7a; font-weight: 500; }
+  .verdict :global(.partial-t) { color: #8f9cae; } .verdict :global(.done-t) { color: var(--gw-green); }
+  .src { font-size: .72rem; margin: 16px 0 0; }
+  code { font-family: var(--gw-font-mono); }
+  @media (max-width: 560px) { .grid :global(.pe) { font-size: .5rem; } .where { margin-left: 0; width: 100%; } }
+</style>

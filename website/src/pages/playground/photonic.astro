@@ -1,0 +1,222 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import { existsSync, readFileSync } from 'node:fs';
+import { site } from '../../site';
+
+// Present when scripts/fetch-modules.mjs fetched and checked the module.
+const dir = 'public/pta-web';
+const manifest = existsSync(`${dir}/manifest.json`) ? JSON.parse(readFileSync(`${dir}/manifest.json`, 'utf8')) : null;
+const rows = manifest && existsSync(`${dir}/rows.json`) ? JSON.parse(readFileSync(`${dir}/rows.json`, 'utf8')) : [];
+const presetName: Record<string, string> = { format_only: 'Format only', as_budgeted: 'As budgeted', lit_fitted: 'As budgeted, lit, fitted' };
+---
+<Base title="Photonic accuracy demo" description="Run the GRX photonic tensor accelerator's error model on the frozen MNIST canary in your browser: the real harness, compiled to WebAssembly.">
+  <PageHead eyebrow="Playground · Photonic accuracy demo" title="How much noise can a photonic tile take?">
+    The photonic tensor accelerator (PTA) is in design, so it is measured against an error model before anything is built.
+    Here that model runs the canary, a small MNIST classifier whose last layer is on a 128 × 64 photonic tile, on 1,000 test images.
+    Change the noise and see whether it still passes Gate F.
+  </PageHead>
+
+  <section style="padding-top:0">
+    <div class="wrap">
+      <p class="model mono"><span class="st st-live">Real harness</span> The canary harness from <a href={`${site.hw.sdk}/tree/main/docs/designs/canary`}>kubeworkz/grxcp</a>, compiled to WebAssembly and running in your browser. Its CI publishes a build only when it prints exactly what the native harness prints.{manifest && <> This one: <a href={`https://github.com/${manifest.repo}/commit/${manifest.commit}`}>{manifest.commit.slice(0, 7)}</a>.</>}</p>
+
+      {!manifest ? (
+        <div class="card"><p>The simulator isn't available on this deploy: its module couldn't be fetched when the site was built. <a href="/docs/hardware/pta">Read about the PTA →</a></p></div>
+      ) : (
+        <div class="pta" data-rows={JSON.stringify(rows)}>
+          <div class="card ctl">
+            <div class="presets mono">
+              <span>The canary's settings:</span>
+              {rows.map((r: any) => <button type="button" data-preset={r.name}>{presetName[r.name] ?? r.name}</button>)}
+            </div>
+            <div class="grid">
+              <fieldset>
+                <legend>Format</legend>
+                <label><span>Activation bits <b id="v-abits"></b></span><input type="range" id="abits" min="3" max="8" step="1" value="6" /></label>
+                <label><span>Converter (ADC) bits <b id="v-adcbits"></b></span><input type="range" id="adcbits" min="6" max="10" step="1" value="8" /></label>
+              </fieldset>
+              <fieldset>
+                <legend>Noise and error</legend>
+                <label class="tog"><input type="checkbox" id="on-thermal" checked /><span>Thermal noise <b id="v-thermal8"></b> <small>LSB of an 8-bit ADC</small></span><input type="range" id="thermal8" min="0.05" max="2" step="0.05" value="0.25" /></label>
+                <label class="tog"><input type="checkbox" id="on-shot" checked /><span>Shot noise: photons <b id="v-photons8"></b> <small>fewer is noisier</small></span><input type="range" id="photons8" min="2" max="200" step="1" value="30" /></label>
+                <label class="tog"><input type="checkbox" id="on-prog" checked /><span>Programming error <b id="v-prog"></b> <small>weight LSB</small></span><input type="range" id="prog" min="0.25" max="4" step="0.25" value="1" /></label>
+                <label class="tog"><input type="checkbox" id="on-xtalk" checked /><span>Crosstalk <b id="v-xtalk"></b></span><input type="range" id="xtalk" min="0.005" max="0.1" step="0.005" value="0.02" /></label>
+              </fieldset>
+              <fieldset>
+                <legend>Light and range</legend>
+                <label class="chk"><input type="checkbox" id="lit" /> <span>Light source error, with level probing and correction</span></label>
+                <label class="chk"><input type="checkbox" id="fit" /> <span>Converter range fitted to the reference</span></label>
+                <label><span>Noise draw (seed) <b id="v-seed"></b></span><input type="range" id="seed" min="1" max="20" step="1" value="1" /></label>
+              </fieldset>
+            </div>
+            <div class="run">
+              <button class="btn btn-primary" id="go" type="button">Run the canary</button>
+              <span class="mono" id="state">The first run downloads about 2.8 MB.</span>
+            </div>
+          </div>
+
+          <div class="results" id="results" hidden>
+            <div class="cards">
+              <div class="card k"><span class="tag">Accuracy</span><b id="r-acc"></b><small id="r-acc-sub"></small></div>
+              <div class="card k"><span class="tag">Gate F · error</span><b id="r-rms"></b><small id="r-rms-sub"></small></div>
+              <div class="card k"><span class="tag">Gate F · class agreement</span><b id="r-agree"></b><small id="r-agree-sub"></small></div>
+              <div class="card k"><span class="tag">Converter saturations</span><b id="r-sats"></b><small id="r-sats-sub"></small></div>
+            </div>
+            <p class="verdict" id="r-verdict"></p>
+            <details class="card raw">
+              <summary class="mono">What the harness printed, and how to run it yourself</summary>
+              <pre class="mono"><code id="r-raw"></code></pre>
+              <p class="mono small">Natively, from <code>docs/designs/canary/harness</code> built with <code>-DN_SIDE=8 -DN_HID=64 -DN_OUT=16</code>:</p>
+              <pre class="mono"><code id="r-cmd"></code></pre>
+            </details>
+          </div>
+
+          <p class="src mono">Gate F, as ruled for the canary (<a href={`${site.hw.sdk}/blob/main/docs/designs/canary/manifest.json`}>manifest.json</a>): the normalised RMS error with one output scale must fall in a physical band of 2.5% to 7.3%, and the scaled outputs must agree with the reference's class on at least 98.5% of the images. Error below the band is better than a physical device is expected to manage. <a href="/docs/hardware/pta">About the PTA →</a></p>
+        </div>
+      )}
+    </div>
+  </section>
+</Base>
+
+<script>
+  type Row = { name: string; args: string[]; output: string };
+  const root = document.querySelector<HTMLElement>('.pta');
+  if (root) {
+    const rows: Row[] = JSON.parse(root.dataset.rows || '[]');
+    const $ = <T extends HTMLElement = HTMLInputElement>(id: string) => document.getElementById(id) as T;
+    const SRC = ['--src', '0.01', '--srcline', '0.05', '--srcflat', '0.2', '--buses', '2', '--levelprobe', '16', '--levelfix', 'weights8'];
+    const PRESET: Record<string, string> = { format_only: 'format only', as_budgeted: 'as budgeted', lit_fitted: 'as budgeted, lit, fitted' };
+    const IMP = [['thermal', 'thermal8'], ['shot', 'photons8'], ['prog', 'prog'], ['xtalk', 'xtalk']] as const;
+
+    function readArgs(): string[] {
+      const impair = ['quant', ...IMP.filter(([k]) => $(`on-${k}`).checked).map(([k]) => k)];
+      const a = ['--rows', '128', '--cols', '64', '--impair', impair.join(','), '--abits', $('abits').value, '--adcbits', $('adcbits').value];
+      for (const [k, f] of IMP) if ($(`on-${k}`).checked) a.push(`--${f}`, $(f).value);
+      a.push('--images', '1000');
+      if ($('lit').checked) a.push(...SRC);
+      if ($('fit').checked) a.push('--gatefit', '1');
+      a.push('--host', '2', '--probe', '1', '--gate', '1', '--gatescale', '1000', '--seed', $('seed').value);
+      return a;
+    }
+    const opt = (args: string[], f: string) => { const i = args.indexOf(f); return i >= 0 ? args[i + 1] : null; };
+    function applyPreset(r: Row) {
+      const imp = (opt(r.args, '--impair') || '').split(',');
+      for (const [k, f] of IMP) { $(`on-${k}`).checked = imp.includes(k); const v = opt(r.args, `--${f}`); if (v) $(f).value = v; }
+      for (const f of ['abits', 'adcbits']) { const v = opt(r.args, `--${f}`); if (v) $(f).value = v; }
+      $('lit').checked = r.args.includes('--src'); $('fit').checked = r.args.includes('--gatefit'); $('seed').value = '1';
+      labels(); run();
+    }
+    function labels() {
+      for (const f of ['abits', 'adcbits', 'thermal8', 'photons8', 'prog', 'xtalk', 'seed']) $(`v-${f}`).textContent = $(f).value;
+      for (const [k, f] of IMP) { $(f).disabled = !$(`on-${k}`).checked; }
+    }
+
+    // The harness prints one line of key=value pairs.
+    const parse = (s: string) => Object.fromEntries([...s.matchAll(/(\w+)=(\S+)/g)].map((m) => [m[1], m[2]]));
+    const pct = (x: string | undefined, d = 2) => (x === undefined ? '—' : `${(+x * 100).toFixed(d)}%`);
+
+    const worker = new Worker('/playground/pta-worker.js');
+    let seq = 0, lastArgs: string[] = [];
+    worker.onmessage = ({ data }) => {
+      if (data.id !== seq) return;
+      if (data.status === 'loading') $('state').textContent = 'Downloading the harness and the canary…';
+      else if (data.status === 'running') $('state').textContent = 'Running 1,000 images through the tile model…';
+      else if (data.status === 'error') { $('state').textContent = `Couldn't run: ${data.message}`; $<HTMLButtonElement>('go').disabled = false; }
+      else if (data.status === 'done') show(data.output, data.code, data.ms);
+    };
+    function run() {
+      lastArgs = readArgs(); seq++;
+      $<HTMLButtonElement>('go').disabled = true;
+      $('state').textContent = 'Starting…';
+      $('results').classList.add('stale');
+      worker.postMessage({ id: seq, args: lastArgs });
+    }
+    function show(output: string, code: number, ms: number) {
+      $<HTMLButtonElement>('go').disabled = false;
+      $('results').classList.remove('stale');
+      const line = output.split('\n').find((l) => l.startsWith('din=')) || '';
+      const k = parse(line);
+      $('results').hidden = false;
+      $('r-raw').textContent = output.trim();
+      $('r-cmd').textContent = `./pta_mnist eval --data DATA --net docs/designs/canary/canary_seed1.net ${lastArgs.join(' ')}`;
+      if (code !== 0 || !line) { $('state').textContent = `The harness stopped with exit code ${code}; its output is below.`; $('r-verdict').textContent = ''; return; }
+      const rms = +k.gate_scale_rms * 100, agree = +k.gate_scale_agree;
+      $('r-acc').textContent = `${(+k.acc).toFixed(1)}%`;
+      $('r-acc-sub').textContent = `noise-free network: ${(+k.digital).toFixed(2)}%`;
+      $('r-rms').textContent = `${rms.toFixed(2)}%`;
+      const band = rms < 2.5 ? 'below the physical band (better than a device is expected to do)' : rms <= 7.3 ? 'inside the 2.5–7.3% band' : 'above the 7.3% ceiling';
+      $('r-rms-sub').textContent = band;
+      $('r-agree').textContent = `${agree.toFixed(1)}%`;
+      $('r-agree-sub').textContent = agree >= 98.5 ? 'at or above 98.5%' : 'below the 98.5% threshold';
+      $('r-sats').textContent = k.sats ?? '—';
+      $('r-sats-sub').textContent = `of ${k.elements ? (+k.elements).toLocaleString('en-US') : '16,000'} outputs; max error ${pct(k.gate_scale_maxfs)} of full scale`;
+      $('r-rms').closest('.k')!.classList.toggle('bad', rms > 7.3);
+      $('r-rms').closest('.k')!.classList.toggle('low', rms < 2.5);
+      $('r-agree').closest('.k')!.classList.toggle('bad', agree < 98.5);
+      const passes = rms <= 7.3 && agree >= 98.5;
+      const preset = rows.find((r) => r.args.join(' ') === lastArgs.slice(0, -2).join(' ') && lastArgs.at(-1) === '1');
+      const same = preset ? (preset.output.trim() === line.trim()) : null;
+      $('r-verdict').innerHTML = (!passes ? '<b class="no">Outside Gate F’s limits.</b> '
+          : rms < 2.5 ? '<b class="low">Quieter than Gate F’s physical band:</b> fine for the model, but a real tile is expected to have at least 2.5% error. '
+          : '<b class="ok">Within Gate F’s limits.</b> ') +
+        (same === true ? `This is the canary’s “${PRESET[preset!.name] ?? preset!.name}” setting, and your browser printed <b class="ok">exactly the same line</b> the harness printed in CI.` :
+         same === false ? 'This is one of the canary’s settings, but the line differs from the harness’s published output.' : '');
+      $('state').textContent = `Ran in ${(ms / 1000).toFixed(2)} s in your browser.`;
+    }
+
+    document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
+      b.addEventListener('click', () => applyPreset(rows.find((r) => r.name === b.dataset.preset)!)));
+    root.querySelectorAll('input').forEach((i) => i.addEventListener('input', labels));
+    $('go').addEventListener('click', run);
+    labels();
+  }
+</script>
+
+<style>
+  .model { font-size: .78rem; margin: 0 0 20px; line-height: 1.6; }
+  .st { display: inline-block; font: 500 .62rem/1 var(--gw-font-mono); letter-spacing: .05em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; border: 1px solid; margin-right: 6px; }
+  .st-live { color: var(--gw-green); border-color: #39ff1455; }
+  .ctl { margin-bottom: 16px; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: .74rem; color: var(--gw-steel); margin-bottom: 18px; }
+  .presets button { font: inherit; color: var(--gw-teal); background: transparent; border: 1px solid var(--gw-line-strong); border-radius: 4px; padding: 5px 10px; cursor: pointer; }
+  .presets button:hover { border-color: var(--gw-teal); }
+  .grid { display: grid; gap: 16px; grid-template-columns: 1fr; }
+  @media (min-width: 960px) { .grid { grid-template-columns: 1fr 1.4fr 1fr; } }
+  .grid > * { min-width: 0; }
+  fieldset { border: 1px solid var(--gw-line); border-radius: var(--gw-radius); padding: 14px; margin: 0; display: grid; gap: 14px; align-content: start; }
+  legend { font: 500 .68rem/1 var(--gw-font-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--gw-teal); padding: 0 6px; }
+  label { display: grid; gap: 6px; font-size: .86rem; color: var(--gw-white); }
+  label b { font-family: var(--gw-font-mono); color: var(--gw-teal); font-weight: 500; margin-left: 4px; }
+  label small { color: var(--gw-steel); font-size: .72rem; margin-left: 4px; }
+  .tog { grid-template-columns: auto 1fr; align-items: center; }
+  .tog input[type=range] { grid-column: 1 / -1; }
+  .chk { grid-template-columns: auto 1fr; align-items: start; }
+  input[type=range] { width: 100%; accent-color: var(--gw-teal); }
+  input[type=range]:disabled { opacity: .3; }
+  input[type=checkbox] { accent-color: var(--gw-teal); width: 16px; height: 16px; }
+  .run { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 18px; }
+  .run .btn { cursor: pointer; }
+  .run .btn:disabled { opacity: .5; cursor: progress; }
+  #state { font-size: .76rem; color: var(--gw-steel); }
+  .cards { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (min-width: 900px) { .cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .k { display: grid; gap: 6px; border-left: 2px solid var(--gw-green); }
+  .k.bad { border-left-color: #ff5c7a; }
+  .k b { font: 600 1.6rem/1.1 var(--gw-font-mono); color: var(--gw-white); }
+  .k.bad b { color: #ff5c7a; }
+  .k.low { border-left-color: #ffb020; }
+  .k.low b { color: #ffb020; }
+  .results { transition: opacity .15s; }
+  .results.stale { opacity: .45; }
+  .k small { font-size: .76rem; color: var(--gw-steel); }
+  .verdict { margin: 16px 0; font-size: .95rem; }
+  .verdict :global(.ok) { color: var(--gw-green); }
+  .verdict :global(.no) { color: #ff5c7a; }
+  .verdict :global(.low) { color: #ffb020; }
+  .raw summary { font-size: .76rem; color: var(--gw-teal); cursor: pointer; }
+  .raw pre { margin: 12px 0 0; padding: 12px; background: #05060a; border: 1px solid var(--gw-line); border-radius: var(--gw-radius); font-size: .68rem; line-height: 1.55; color: var(--gw-steel); white-space: pre-wrap; word-break: break-all; }
+  .small { font-size: .72rem; margin: 12px 0 0; }
+  code { font-family: var(--gw-font-mono); }
+  .src { font-size: .74rem; margin: 20px 0 0; line-height: 1.6; }
+</style>

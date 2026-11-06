@@ -1,0 +1,50 @@
+---
+import Logo from './Logo.astro';
+import { site } from '../site';
+const links = [
+  { href: '/technology', label: 'Technology' },
+  { href: '/docs', label: 'Docs' },
+  { href: '/labs', label: 'For Labs' },
+  { href: '/playground', label: 'Playground' },
+  { href: '/how-we-build', label: 'How we build' },
+  { href: '/company', label: 'Company' },
+];
+const path = Astro.url.pathname.replace(/\/$/, '');
+const active = (href: string) => path === href || path.startsWith(href + '/');
+---
+<header class="hdr">
+  <div class="wrap row">
+    <Logo />
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="Toggle menu" />
+    <label for="nav-toggle" class="burger" aria-hidden="true"><span></span><span></span></label>
+    <nav aria-label="Main">
+      {links.map((l) => (
+        <a href={l.href} aria-current={active(l.href) ? 'page' : undefined}>{l.label}</a>
+      ))}
+      <a class="btn btn-ghost gh" href={site.githubOrg}>GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+<style>
+  .hdr {
+    position: sticky; top: 0; z-index: 50;
+    background: #090a0fcc; backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--gw-line);
+  }
+  .row { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  nav { display: flex; align-items: center; gap: 28px; }
+  nav a:not(.btn) { color: var(--gw-steel); font-size: .92rem; }
+  nav a:not(.btn):hover, nav a[aria-current] { color: var(--gw-white); text-decoration: none; }
+  .gh { padding: .55em 1em; font-size: .82rem; }
+  .nav-toggle, .burger { display: none; }
+  @media (max-width: 860px) {
+    .burger { display: grid; gap: 6px; cursor: pointer; padding: 8px; }
+    .burger span { width: 22px; height: 2px; background: var(--gw-white); display: block; }
+    nav {
+      display: none; position: absolute; top: 64px; left: 0; right: 0;
+      flex-direction: column; align-items: flex-start; gap: 18px;
+      padding: 24px 16px; background: var(--gw-bg); border-bottom: 1px solid var(--gw-line);
+    }
+    .nav-toggle:checked ~ nav { display: flex; }
+  }
+</style>

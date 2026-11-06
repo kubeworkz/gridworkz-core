@@ -1,0 +1,187 @@
+---
+import Base from '../layouts/Base.astro';
+import Terminal from '../components/Terminal.astro';
+import Architecture from '../components/Architecture.astro';
+import LabForm from '../components/LabForm.astro';
+import RepoStats from '../components/RepoStats.astro';
+import { site } from '../site';
+---
+<Base>
+  <!-- 1. Hook -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">[ GRX930 · G100 · GRXCP ]</span>
+        <h1>Open Silicon.<br />No NDAs.<br /><span class="hl">No Licensing Fees.</span></h1>
+        <p class="lede">
+          Gridworkz is building the Linux of chip design: a quad-core RISC-V SoC with dual NPUs, an open RISC-V GPU,
+          and a photonic tensor accelerator in design, all on GitHub. Built for university labs and research teams.
+        </p>
+        <div class="btn-row">
+          <a class="btn btn-primary" href={site.githubOrg}>Get the hardware on GitHub ↗</a>
+          <a class="btn btn-ghost" href="/manifesto">Read the manifesto</a>
+        </div>
+        <ul class="chips mono">
+          <li>Apache 2.0</li><li>RISC-V</li><li>SystemVerilog</li><li>Icarus Verilog</li><li>Verilator</li>
+        </ul>
+      </div>
+      <!-- 2. Proof -->
+      <Terminal />
+    </div>
+  </section>
+
+  <!-- Live GitHub stats (off until site.showRepoStats is true) -->
+  <RepoStats />
+
+  <!-- Zero-cost pitch -->
+  <section class="section-line">
+    <div class="wrap">
+      <span class="eyebrow">Zero-cost simulation</span>
+      <h2>From git clone to a passing<br />NPU test in minutes.</h2>
+      <p class="lede">No NDAs and no EDA licenses to simulate. The test suites run on open-source simulators, on your laptop.</p>
+      <div class="bento" style="margin-top:40px">
+        <article class="card">
+          <span class="tag">Simulate</span>
+          <h3>52 testbenches, ready to run</h3>
+          <p>GRX930 ships with Icarus Verilog testbenches, equivalence gates and formal checks: <code>make npu</code>, <code>make soc</code>, <code>make quad</code>. The G100 runs on its SimX and RTL simulators.</p>
+        </article>
+        <article class="card">
+          <span class="tag">Program</span>
+          <h3>CUDA-style kernels</h3>
+          <p>GRXCP gives you <code>__global__</code> kernels, <code>&lt;&lt;&lt;&gt;&gt;&gt;</code> launches and a CUDA-shaped runtime for the G100, with a header that maps <code>cudaX</code> to <code>grxX</code>.</p>
+          <a class="mono card-link" href="/playground/cuda-check">Check your CUDA code →</a>
+        </article>
+        <article class="card">
+          <span class="tag">Synthesize</span>
+          <h3>Timing closed on FPGA</h3>
+          <p>A Vivado flow and pin constraints for the Nexys Video (Artix-7 200T). The full quad-core SoC closes timing at ~121 MHz with zero failing paths.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Architecture -->
+  <section class="section-line" id="architecture">
+    <div class="wrap">
+      <span class="eyebrow">Architecture</span>
+      <h2>Every block, exposed.</h2>
+      <p class="lede">Select a block to see the source behind it, its docs and how far it has been proven.</p>
+      <div style="margin-top:40px"><Architecture /></div>
+    </div>
+  </section>
+
+  <!-- The open stack -->
+  <section class="section-line">
+    <div class="wrap">
+      <span class="eyebrow">The open stack</span>
+      <h2>Layered like an operating system.</h2>
+      <div class="stack">
+        <article class="card layer">
+          <span class="tag">Layer 0 · Base</span>
+          <h3>Unhindered bare-metal compute.</h3>
+          <p>GRX930: four RV64IMAC cores with caches, coherent L2 and an AXI4 fabric. No microcode to hide behind. Change the pipeline, add instructions, rerun the test suite.</p>
+        </article>
+        <article class="card layer">
+          <span class="tag">Layer 1 · Acceleration</span>
+          <h3>Accessible tensor workloads.</h3>
+          <p>Two systolic NPUs (INT4 to BF16) and the G100 GPU with tensor cores (fp8 to fp32), both with every register documented and every line of RTL readable.</p>
+        </article>
+        <article class="card layer">
+          <span class="tag">Layer 2 · Frontier</span>
+          <h3>Photonic matrix multiply, in design.</h3>
+          <p>A 128 × 64 photonic GEMM tile, planned as a chiplet beside the G100. It's being designed against an error model first, so its accuracy is known before anything is fabricated.</p>
+        </article>
+        <article class="card layer sdk">
+          <span class="tag">Layer 3 · Software</span>
+          <h3>Programmable hardware. Zero assembly required.</h3>
+          <p>Write parallel C++ with GRXCP, built on the VOLT LLVM toolchain. If you can write CUDA, you can write kernels for the G100.</p>
+          <pre class="snippet"><code><span class="k">__global__</span> <span class="t">void</span> axpy(<span class="t">const float</span>* x, <span class="t">float</span>* y, <span class="t">unsigned int</span> n, <span class="t">float</span> a) {'{'}
+  <span class="t">const unsigned int</span> i = blockIdx.x * blockDim.x + threadIdx.x;
+  <span class="k">if</span> (i &lt; n) y[i] = a * x[i] + y[i];
+{'}'}</code></pre>
+          <a class="mono" href="/docs/software/grxcp">GRXCP docs →</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Docs teaser -->
+  <section class="section-line">
+    <div class="wrap docs-teaser">
+      <div>
+        <span class="eyebrow">Documentation</span>
+        <h2>Read the registers before you write the grant.</h2>
+        <p class="lede">RTL architecture, register maps, pinouts, toolchain setup and errata, all public and versioned with the code.</p>
+        <div class="btn-row"><a class="btn btn-ghost" href="/docs">Open the docs →</a></div>
+      </div>
+      <div class="regmap card mono" aria-label="Register map excerpt">
+        <div class="rm-h"><span>GRX930 · NPU0 CSR</span><span>0x4000_0000</span></div>
+        <table>
+          <thead><tr><th>Offset</th><th>Register</th><th>Access</th></tr></thead>
+          <tbody>
+            <tr><td>0x00</td><td>CTRL · START</td><td>W</td></tr>
+            <tr><td>0x04</td><td>STATUS · BUSY DONE ERROR</td><td>R</td></tr>
+            <tr><td>0x08–0x10</td><td>DIM_M / DIM_N / DIM_K</td><td>RW</td></tr>
+            <tr><td>0x14–0x1C</td><td>A_BASE / B_BASE / C_BASE</td><td>RW</td></tr>
+            <tr><td>0x20</td><td>PREC · INT8…INT4</td><td>RW</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Lead capture -->
+  <section class="section-line" id="request">
+    <div class="wrap lead">
+      <div>
+        <span class="eyebrow">For labs</span>
+        <h2>Request an evaluation board for your lab.</h2>
+        <p>Ready to move from simulation to hardware? GRX930 runs on the Nexys Video (Artix-7 200T). Tell us about your research and we'll help you get set up.</p>
+        <p><a href="/labs">Allocation details and grant datasheet →</a></p>
+      </div>
+      <LabForm />
+    </div>
+  </section>
+
+  <section class="section-line cta">
+    <div class="wrap">
+      <h2>Stop buying black boxes.<br /><span class="hl">Start building the future of hardware.</span></h2>
+      <p class="lede">Fork the code, run the test suites in open-source simulators, or build GRX930 for an FPGA board and test your ideas on real hardware.</p>
+      <div class="btn-row"><a class="btn btn-primary" href={site.githubOrg}>Fork on GitHub ↗</a></div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero { padding: 72px 0 96px; }
+  .hero-grid { display: grid; gap: 48px; align-items: center; grid-template-columns: 1fr; }
+  @media (min-width: 1000px) { .hero-grid { grid-template-columns: 1.05fr 1fr; } }
+  .hero-grid > * { min-width: 0; }
+  .hl { color: var(--gw-teal); }
+  .card code { font-family: var(--gw-font-mono); font-size: .85em; color: var(--gw-white); }
+  .card-link { font-size: .82rem; }
+  .chips { list-style: none; padding: 0; margin: 32px 0 0; display: flex; flex-wrap: wrap; gap: 8px; }
+  .chips li { font-size: .72rem; padding: 5px 10px; border: 1px solid var(--gw-line-strong); border-radius: 99px; }
+  .stack { display: grid; gap: 16px; margin-top: 40px; grid-template-columns: 1fr; }
+  @media (min-width: 820px) { .stack { grid-template-columns: repeat(3, 1fr); } .sdk { grid-column: 1 / -1; } }
+  .layer { border-left: 2px solid var(--gw-teal); }
+  .sdk { display: grid; gap: 4px 40px; }
+  @media (min-width: 820px) { .sdk { grid-template-columns: 1fr 1.2fr; } .sdk .snippet { grid-column: 2; grid-row: 1 / span 4; align-self: center; } }
+  .snippet {
+    margin: 12px 0; padding: 16px; background: #05060a; border: 1px solid var(--gw-line); border-radius: var(--gw-radius);
+    font-size: .78rem; line-height: 1.7; color: var(--gw-white); overflow-x: auto;
+  }
+  .k { color: var(--gw-teal); } .t { color: #7aa2ff; }
+  .docs-teaser, .lead { display: grid; gap: 40px; grid-template-columns: 1fr; align-items: center; }
+  @media (min-width: 900px) { .docs-teaser { grid-template-columns: 1fr 1fr; } .lead { grid-template-columns: .8fr 1.2fr; align-items: start; } }
+  .regmap { padding: 0; overflow: hidden; font-size: .8rem; }
+  .rm-h { display: flex; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid var(--gw-line); color: var(--gw-teal); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 18px; border-bottom: 1px solid var(--gw-line); }
+  th { color: var(--gw-steel); font-weight: 500; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; }
+  td { color: var(--gw-white); }
+  tr:last-child td { border-bottom: 0; }
+  .cta { text-align: center; padding: 120px 0; }
+  .cta .lede { margin: 0 auto; }
+  .cta .btn-row { justify-content: center; }
+</style>

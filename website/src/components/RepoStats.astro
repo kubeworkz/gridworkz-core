@@ -1,0 +1,91 @@
+---
+// Live GitHub stats strip, summed across site.statsRepos. Loaded at build
+// time, so it refreshes on every deploy. Renders nothing if switched off, or
+// if any repo can't be read (no partial totals).
+import { site } from '../site';
+import { gh, ghAll, ghCount } from '../lib/github';
+
+type Stat = { label: string; value: number; href: string };
+let stats: Stat[] = [];
+const repos = site.statsRepos;
+const names = repos.map((r) => r.split('/')[1]);
+const repoQuery = repos.map((r) => `repo:${r}`).join('+');
+
+if (site.showRepoStats && repos.length) {
+  try {
+    const perRepo = await Promise.all(repos.map(async (slug) => {
+      const [info, contributors, openPrs] = await Promise.all([
+        gh(`repos/${slug}`).then((r) => r.json() as Promise<{ stargazers_count: number; forks_count: number }>),
+        ghAll<{ login: string }>(`repos/${slug}/contributors`),
+        ghCount(`repos/${slug}/pulls?state=open`),
+      ]);
+      return { info, logins: contributors.map((c) => c.login), openPrs };
+    }));
+    const sum = (f: (r: (typeof perRepo)[number]) => number) => perRepo.reduce((a, r) => a + f(r), 0);
+    // A person who contributes to several repos counts once.
+    const contributors = new Set(perRepo.flatMap((r) => r.logins)).size;
+
+    stats = [
+      { label: 'GitHub stars', value: sum((r) => r.info.stargazers_count), href: site.githubOrg },
+      { label: 'Contributors', value: contributors, href: site.githubOrg },
+      { label: 'Open pull requests', value: sum((r) => r.openPrs), href: `https://github.com/search?q=${repoQuery}+is%3Apr+is%3Aopen&type=pullrequests` },
+      { label: 'Forks', value: sum((r) => r.info.forks_count), href: site.githubOrg },
+    ];
+
+    // Its own try: if this one call fails, keep the Forks tile rather than
+    // losing the whole bar over it.
+    if (site.verify.repo && site.verify.workflow) {
+      try {
+        const runs = await gh(`repos/${site.verify.repo}/actions/workflows/${site.verify.workflow}/runs?branch=main&status=success&per_page=1`)
+          .then((r) => r.json() as Promise<{ total_count: number }>);
+        stats.splice(3, 1, {
+          label: 'Verified builds', value: runs.total_count,
+          href: '/playground/replays',
+        });
+      } catch (e) {
+        console.warn(`[repo-stats] verified-builds tile skipped: ${(e as Error).message}`);
+      }
+    }
+  } catch (e) {
+    console.warn(`[repo-stats] skipped: ${(e as Error).message}`);
+    stats = [];
+  }
+}
+const nf = new Intl.NumberFormat('en-US');
+---
+{stats.length > 0 && (
+  <section class="stats-bar" aria-label="Live project stats from GitHub">
+    <div class="wrap">
+      <div class="bar">
+        <span class="live mono"><i aria-hidden="true"></i><span>Live from GitHub<small>{names.join(' · ')}</small></span></span>
+        <ul>
+          {stats.map((s) => (
+            <li>
+              <a href={s.href}>
+                <span class="v mono">{nf.format(s.value)}</span>
+                <span class="l mono">{s.label}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  </section>
+)}
+<style>
+  .stats-bar { padding: 0 0 72px; }
+  .bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px 32px;
+    border: 1px solid var(--gw-line); border-radius: 10px; background: var(--gw-surface); padding: 18px 24px;
+  }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--gw-steel); }
+  .live small { display: block; font-size: .62rem; letter-spacing: .04em; text-transform: none; color: #5c6678; margin-top: 3px; }
+  .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--gw-green); box-shadow: 0 0 8px var(--gw-green); animation: live 2s ease-in-out infinite; }
+  @keyframes live { 50% { opacity: .35; } }
+  ul { list-style: none; margin: 0; padding: 0; flex: 1; display: grid; gap: 12px 24px; grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 760px) { ul { grid-template-columns: repeat(4, 1fr); } }
+  a { display: grid; gap: 2px; padding: 4px 0 4px 14px; border-left: 2px solid var(--gw-line-strong); }
+  a:hover { text-decoration: none; border-left-color: var(--gw-teal); }
+  .v { font-size: 1.5rem; font-weight: 600; color: var(--gw-teal); line-height: 1.2; }
+  .l { font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--gw-steel); }
+</style>
