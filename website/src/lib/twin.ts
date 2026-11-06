@@ -36,6 +36,8 @@ export interface TwinRun {
 export interface TwinIndex {
   schema_version: string; generated_at: string; commit: string | null; run_url: string | null;
   claim: string; runs: TwinRun[];
+  /** browser/manifest.json when the bundle carries the Pyodide runner. */
+  browser?: string;
 }
 export interface Manifest {
   inputs: { role: string; path: string; sha256: string; bytes?: number }[];
@@ -134,3 +136,30 @@ export const fmt = {
   mm2: (m2: number, d = 2) => `${(m2 * 1e6).toFixed(d)} mm²`,
 };
 export const WEEK_S = WEEK;
+
+// The browser runner's inputs (browser/inputs.json): each scenario's input
+// files by role, parsed. Controls start from these values.
+export interface BrowserInputs { scenarios: Record<string, Record<string, string>>; files: Record<string, unknown> }
+export async function loadBrowserInputs(index: TwinIndex | null): Promise<BrowserInputs | null> {
+  if (!index?.browser) return null;
+  try {
+    const manifest = JSON.parse(await get(index.browser)) as { inputs?: { path: string } };
+    if (!manifest.inputs) return null;
+    return JSON.parse(await get(manifest.inputs.path)) as BrowserInputs;
+  } catch {
+    return null;
+  }
+}
+
+/** Read the number at a dotted path, selecting list entries by id, as fabtwin.browser does. */
+export function inputValue(inputs: BrowserInputs, scenario: string, role: string, dotted: string): number {
+  const file = inputs.scenarios[scenario]?.[role];
+  if (!file) throw new Error(`twin: ${scenario} has no ${role} input`);
+  let node: unknown = inputs.files[file];
+  for (const part of dotted.split('.')) {
+    if (Array.isArray(node)) node = node.find((x) => (x as { id?: string })?.id === part);
+    else node = (node as Record<string, unknown> | undefined)?.[part];
+  }
+  if (typeof node !== 'number') throw new Error(`twin: ${file} ${dotted} is not a number`);
+  return node;
+}
