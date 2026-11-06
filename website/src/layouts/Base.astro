@@ -5,7 +5,7 @@ import Footer from '../components/Footer.astro';
 interface Props { title?: string; description?: string; }
 const {
   title,
-  description = 'Gridworkz builds open silicon: the GRX930 RISC-V SoC with dual NPUs, the G100 open RISC-V GPU, and a photonic tensor accelerator in design. No NDAs.',
+  description = 'Gridworkz builds open silicon and the digital twin that models how it gets made: the GRX930 RISC-V SoC, the G100 open GPU and a photonic tensor accelerator, from a 28 nm-class process model to a discrete-event fab. No NDAs.',
 } = Astro.props;
 const fullTitle = title ? `${title} · Gridworkz` : 'Gridworkz · Open Silicon for Research';
 const canonical = new URL(Astro.url.pathname, Astro.site);

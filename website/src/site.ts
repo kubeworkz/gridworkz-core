@@ -2,8 +2,8 @@
 export const site = {
   name: 'Gridworkz',
   domain: 'gridworkz.com',
-  repo: 'https://github.com/gridworkz/gridworkz-core',
-  repoSlug: 'gridworkz/gridworkz-core',
+  repo: 'https://github.com/kubeworkz/gridworkz-core',
+  repoSlug: 'kubeworkz/gridworkz-core',
   // Where the hardware lives. Hardware links (navbar, clone buttons, RTL
   // source) point here; the website and docs stay in `repo` above.
   githubOrg: 'https://github.com/kubeworkz',

@@ -1,0 +1,51 @@
+---
+// One series of horizontal bars, direct-labelled, with hover tips and a table view.
+interface Bar { label: string; value: number; tip: string; note?: string }
+interface Props {
+  title: string; bars: Bar[]; max?: number;
+  valueLabel: string; fmtValue: (v: number) => string;
+}
+const { title, bars, max, valueLabel, fmtValue } = Astro.props;
+const top = max ?? Math.max(...bars.map((b) => b.value));
+const ROW = 26, LBL = 168, W = 540, VAL = 96;
+const H = bars.length * ROW + 8;
+const bw = (v: number) => Math.max(0, (v / top) * (W - LBL - VAL));
+---
+<figure class="bc">
+  <figcaption>{title}</figcaption>
+  <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title}>
+    {bars.map((b, i) => {
+      const y = 4 + i * ROW, w = bw(b.value);
+      return (
+        <g data-tip={b.tip} tabindex="0">
+          <rect x="0" y={y} width={W} height={ROW - 2} class="hit" />
+          <text x={LBL - 10} y={y + ROW / 2 + 3} class="lb" text-anchor="end">{b.label}</text>
+          <path class="bar" d={`M${LBL},${y + 5} h${Math.max(0, w - 4)} a4,4 0 0 1 4,4 v${ROW - 20} a4,4 0 0 1 -4,4 h${-Math.max(0, w - 4)} z`} />
+          <text x={LBL + w + 8} y={y + ROW / 2 + 3} class="vl">{fmtValue(b.value)}{b.note ? ` · ${b.note}` : ''}</text>
+        </g>
+      );
+    })}
+  </svg>
+  <details class="tv">
+    <summary class="mono">Table</summary>
+    <table class="mono"><thead><tr><th></th><th>{valueLabel}</th></tr></thead>
+      <tbody>{bars.map((b) => <tr><td>{b.label}</td><td>{fmtValue(b.value)}</td></tr>)}</tbody></table>
+  </details>
+</figure>
+<style>
+  .bc { margin: 0; min-width: 0; }
+  figcaption { color: var(--gw-white); font-size: .95rem; margin-bottom: 8px; }
+  svg { width: 100%; height: auto; display: block; }
+  .lb { fill: var(--gw-steel); font: 12px var(--gw-font-mono); }
+  .vl { fill: var(--gw-white); font: 11px var(--gw-font-mono); }
+  .bar { fill: var(--gw-teal); }
+  .hit { fill: transparent; }
+  g[data-tip]:hover .hit, g[data-tip]:focus .hit { fill: #ffffff08; }
+  g[data-tip]:focus { outline: none; }
+  .tv { margin-top: 6px; font-size: .8rem; }
+  .tv summary { cursor: pointer; color: var(--gw-steel); }
+  .tv table { border-collapse: collapse; margin-top: 6px; font-size: .78rem; }
+  .tv th, .tv td { text-align: right; padding: 3px 10px; border-bottom: 1px solid var(--gw-line); }
+  .tv td:first-child { text-align: left; }
+  .tv th { color: var(--gw-white); font-weight: 500; }
+</style>

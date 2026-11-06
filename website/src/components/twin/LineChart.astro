@@ -1,0 +1,67 @@
+---
+// One series over a numeric x axis, with hover tips and a table view.
+interface Point { x: number; y: number; tip: string }
+interface Props {
+  title: string; points: Point[];
+  xLabel: string; yLabel: string;
+  xTick: (v: number) => string; yTick: (v: number) => string;
+  zeroLine?: boolean;
+}
+const { title, points, xLabel, yLabel, xTick, yTick, zeroLine = false } = Astro.props;
+const W = 520, H = 260, L = 64, R = 16, T = 16, B = 44;
+const xs = points.map((p) => p.x), ys = points.map((p) => p.y);
+const x0 = Math.min(...xs), x1 = Math.max(...xs);
+let y0 = Math.min(...ys), y1 = Math.max(...ys);
+if (zeroLine) { y0 = Math.min(y0, 0); y1 = Math.max(y1, 0); }
+const pad = (y1 - y0 || Math.abs(y1) || 1) * 0.12;
+y0 -= pad; y1 += pad;
+const sx = (v: number) => L + ((v - x0) / (x1 - x0 || 1)) * (W - L - R);
+const sy = (v: number) => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+const yTicks = Array.from({ length: 5 }, (_, i) => y0 + pad + ((y1 - y0 - 2 * pad) * i) / 4);
+const path = points.map((p, i) => `${i ? 'L' : 'M'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ');
+---
+<figure class="lc">
+  <figcaption>{title}</figcaption>
+  <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={title}>
+    {yTicks.map((v) => (
+      <g>
+        <line x1={L} x2={W - R} y1={sy(v)} y2={sy(v)} class="grid" />
+        <text x={L - 8} y={sy(v) + 4} class="tk" text-anchor="end">{yTick(v)}</text>
+      </g>
+    ))}
+    {zeroLine && <line x1={L} x2={W - R} y1={sy(0)} y2={sy(0)} class="zero" />}
+    {points.map((p) => <text x={sx(p.x)} y={H - B + 18} class="tk" text-anchor="middle">{xTick(p.x)}</text>)}
+    <text x={(L + W - R) / 2} y={H - 6} class="ax" text-anchor="middle">{xLabel}</text>
+    <path d={path} class="ln" />
+    {points.map((p) => (
+      <g data-tip={p.tip} tabindex="0">
+        <circle cx={sx(p.x)} cy={sy(p.y)} r="14" class="hit" />
+        <circle cx={sx(p.x)} cy={sy(p.y)} r="4.5" class="dot" />
+      </g>
+    ))}
+  </svg>
+  <details class="tv">
+    <summary class="mono">Table</summary>
+    <table class="mono"><thead><tr><th>{xLabel}</th><th>{yLabel}</th></tr></thead>
+      <tbody>{points.map((p) => <tr><td>{xTick(p.x)}</td><td>{yTick(p.y)}</td></tr>)}</tbody></table>
+  </details>
+</figure>
+<style>
+  .lc { margin: 0; min-width: 0; }
+  figcaption { color: var(--gw-white); font-size: .95rem; margin-bottom: 8px; }
+  svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .grid { stroke: var(--gw-line-strong); stroke-width: 1; }
+  .zero { stroke: var(--gw-steel); stroke-width: 1; stroke-dasharray: 3 3; }
+  .tk { fill: var(--gw-steel); font: 11px var(--gw-font-mono); }
+  .ax { fill: var(--gw-steel); font: 12px var(--gw-font-sans); }
+  .ln { fill: none; stroke: var(--gw-teal); stroke-width: 2; stroke-linejoin: round; }
+  .dot { fill: var(--gw-teal); stroke: var(--gw-surface); stroke-width: 2; }
+  .hit { fill: transparent; cursor: default; }
+  g[data-tip]:focus { outline: none; }
+  g[data-tip]:focus .dot, g[data-tip]:hover .dot { r: 6; }
+  .tv { margin-top: 6px; font-size: .8rem; }
+  .tv summary { cursor: pointer; color: var(--gw-steel); }
+  .tv table { border-collapse: collapse; margin-top: 6px; font-size: .78rem; }
+  .tv th, .tv td { text-align: right; padding: 3px 10px; border-bottom: 1px solid var(--gw-line); }
+  .tv th { color: var(--gw-white); font-weight: 500; }
+</style>
